@@ -7,6 +7,7 @@ import ht.edu.ueh.fds.tontine.service.CotisationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 /** Endpoints des cotisations et paiements. */
@@ -19,25 +20,23 @@ public class CotisationController {
 
     /** Payer sa cotisation (Membre) avec une reference Mon Cash. */
     @PostMapping("/cotisations/{cotisationId}/payer")
-    public PaiementResponse payer(@RequestHeader("X-User-Id") String userId,
+    public PaiementResponse payer(Principal principal,
                                   @PathVariable String cotisationId,
                                   @RequestBody PayerCotisationRequest req) {
         return PaiementResponse.from(
-                cotisationService.payerCotisation(cotisationId, userId, req.referenceMonCash()));
+                cotisationService.payerCotisation(cotisationId, principal.getName(), req.referenceMonCash()));
     }
 
     /** Valider un paiement (Manman sol). */
     @PostMapping("/paiements/{paiementId}/valider")
-    public CotisationResponse valider(@RequestHeader("X-User-Id") String userId,
-                                      @PathVariable String paiementId) {
-        return CotisationResponse.from(cotisationService.validerPaiement(paiementId, userId));
+    public CotisationResponse valider(Principal principal, @PathVariable String paiementId) {
+        return CotisationResponse.from(cotisationService.validerPaiement(paiementId, principal.getName()));
     }
 
     /** Rejeter un paiement (Manman sol). */
     @PostMapping("/paiements/{paiementId}/rejeter")
-    public CotisationResponse rejeter(@RequestHeader("X-User-Id") String userId,
-                                      @PathVariable String paiementId) {
-        return CotisationResponse.from(cotisationService.rejeterPaiement(paiementId, userId));
+    public CotisationResponse rejeter(Principal principal, @PathVariable String paiementId) {
+        return CotisationResponse.from(cotisationService.rejeterPaiement(paiementId, principal.getName()));
     }
 
     /** Historique des cotisations d'un membre (consulter son compte). */

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 /** Endpoints du cercle de tontine : creer, rejoindre, demarrer, membres. */
@@ -22,7 +23,7 @@ public class SolController {
 
     /** Creer un Sol (Manman sol). */
     @PostMapping
-    public ResponseEntity<SolResponse> creer(@RequestHeader("X-User-Id") String userId,
+    public ResponseEntity<SolResponse> creer(Principal principal,
                                              @RequestBody CreerSolRequest req) {
         Sol sol = Sol.builder()
                 .nom(req.nom()).description(req.description())
@@ -31,29 +32,28 @@ public class SolController {
                 .frequence(req.frequence()).dateDebut(req.dateDebut())
                 .build();
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(SolResponse.from(solService.creerSol(userId, sol)));
+                .body(SolResponse.from(solService.creerSol(principal.getName(), sol)));
     }
 
     /** Rejoindre un Sol via le code d'invitation. */
     @PostMapping("/rejoindre")
-    public ResponseEntity<MembreSolResponse> rejoindre(@RequestHeader("X-User-Id") String userId,
+    public ResponseEntity<MembreSolResponse> rejoindre(Principal principal,
                                                        @RequestBody RejoindreRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(MembreSolResponse.from(solService.rejoindreParCode(userId, req.codeInvitation())));
+                .body(MembreSolResponse.from(
+                        solService.rejoindreParCode(principal.getName(), req.codeInvitation())));
     }
 
     /** Demarrer le cycle (plus d'adhesion possible). */
     @PostMapping("/{solId}/demarrer")
-    public SolResponse demarrer(@RequestHeader("X-User-Id") String userId,
-                                @PathVariable String solId) {
-        return SolResponse.from(solService.demarrerCycle(userId, solId));
+    public SolResponse demarrer(Principal principal, @PathVariable String solId) {
+        return SolResponse.from(solService.demarrerCycle(principal.getName(), solId));
     }
 
     /** Quitter un Sol. */
     @DeleteMapping("/{solId}/membres/moi")
-    public ResponseEntity<Void> seDesinscrire(@RequestHeader("X-User-Id") String userId,
-                                              @PathVariable String solId) {
-        solService.seDesinscrire(userId, solId);
+    public ResponseEntity<Void> seDesinscrire(Principal principal, @PathVariable String solId) {
+        solService.seDesinscrire(principal.getName(), solId);
         return ResponseEntity.noContent().build();
     }
 

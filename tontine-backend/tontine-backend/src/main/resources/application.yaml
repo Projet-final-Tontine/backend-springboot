@@ -19,3 +19,11 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    # Cle secrete de signature des jetons (>= 32 caracteres). A definir via
+    # la variable d'environnement JWT_SECRET en production.
+    secret: ${JWT_SECRET:changez-cette-cle-secrete-tontine-sol-en-ligne-2026-fds-ueh}
+    # Duree de validite d'un jeton : 24 heures (en millisecondes).
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}

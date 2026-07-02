@@ -1,14 +1,17 @@
 package ht.edu.ueh.fds.tontine.controller;
 
 import ht.edu.ueh.fds.tontine.dto.AuthRequests.*;
+import ht.edu.ueh.fds.tontine.dto.ConnexionResponse;
 import ht.edu.ueh.fds.tontine.dto.UtilisateurResponse;
 import ht.edu.ueh.fds.tontine.entity.Utilisateur;
+import ht.edu.ueh.fds.tontine.security.JwtService;
 import ht.edu.ueh.fds.tontine.service.UtilisateurService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.Map;
 
 /** Endpoints de comptes : inscription, connexion, profil, mot de passe. */
@@ -18,6 +21,7 @@ import java.util.Map;
 public class AuthController {
 
     private final UtilisateurService utilisateurService;
+    private final JwtService jwtService;
 
     @PostMapping("/inscription")
     public ResponseEntity<UtilisateurResponse> inscrire(@RequestBody InscriptionRequest req) {
@@ -31,23 +35,25 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(UtilisateurResponse.from(cree));
     }
 
+    /** Connexion : renvoie un jeton JWT a utiliser pour les requetes suivantes. */
     @PostMapping("/connexion")
-    public UtilisateurResponse connecter(@RequestBody ConnexionRequest req) {
-        return UtilisateurResponse.from(
-                utilisateurService.connecter(req.telephone(), req.motDePasse()));
+    public ConnexionResponse connecter(@RequestBody ConnexionRequest req) {
+        Utilisateur u = utilisateurService.connecter(req.telephone(), req.motDePasse());
+        String token = jwtService.genererToken(u);
+        return new ConnexionResponse(token, UtilisateurResponse.from(u));
     }
 
+    /** Modifier son profil (l'utilisateur est identifie par son jeton). */
     @PutMapping("/profil")
-    public UtilisateurResponse modifierProfil(@RequestHeader("X-User-Id") String userId,
+    public UtilisateurResponse modifierProfil(Principal principal,
                                               @RequestBody ModifierProfilRequest req) {
         return UtilisateurResponse.from(utilisateurService.modifierProfil(
-                userId, req.nom(), req.prenom(), req.adresse(), req.photoUrl()));
+                principal.getName(), req.nom(), req.prenom(), req.adresse(), req.photoUrl()));
     }
 
     @PostMapping("/mot-de-passe/demande")
     public Map<String, String> demanderReset(@RequestBody DemandeResetRequest req) {
         utilisateurService.demanderReinitialisation(req.telephone());
-        // Le code est envoye par SMS ; on ne le renvoie jamais dans la reponse.
         return Map.of("message", "Si le numero existe, un code de reinitialisation a ete envoye par SMS.");
     }
 

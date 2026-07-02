@@ -15,8 +15,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Test de bout en bout du parcours principal via l'API HTTP :
- * inscription -> activation admin -> creation d'un Sol -> adhesion via code.
+ * Test de bout en bout du parcours principal via l'API HTTP securisee (JWT) :
+ * inscription -> connexion (jeton) -> activation admin -> creation d'un Sol
+ * -> adhesion via code -> controles de securite.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -29,27 +30,28 @@ class ParcoursSolIntegrationTest {
     ObjectMapper json;
 
     @Test
-    void parcoursComplet_inscriptionActivationCreationAdhesion() throws Exception {
-        // 1. Inscription d'un administrateur
-        String adminId = idDe(inscrire("Admin", "Sys", "50937000000",
-                "admin@sol.ht", "001-000", "ADMIN"));
-
-        // 2. Inscription d'une Manman sol (statut EN_ATTENTE au depart)
+    void parcoursComplet_avecAuthentificationJwt() throws Exception {
+        // 1. Inscriptions
+        inscrire("Admin", "Sys", "50937000000", "admin@sol.ht", "001-000", "ADMIN");
         MvcResult manmanRes = inscrire("Jean", "Marie", "50937111111",
                 "manman@sol.ht", "001-111", "MANMAN_SOL");
-        String manmanId = idDe(manmanRes);
+        String manmanId = champ(manmanRes, "id");
         assertThat(champ(manmanRes, "statut")).isEqualTo("EN_ATTENTE");
 
-        // 3. L'admin active le compte de la Manman sol
-        MvcResult activation = mvc.perform(post("/api/admin/utilisateurs/" + manmanId + "/activer")
-                        .header("X-User-Id", adminId))
-                .andExpect(status().isOk())
-                .andReturn();
-        assertThat(champ(activation, "statut")).isEqualTo("ACTIF");
+        // 2. Connexions -> recuperation des jetons JWT
+        String adminToken = connecter("50937000000", "motdepasse123");
+        assertThat(adminToken).isNotBlank();
 
-        // 4. La Manman sol cree un Sol -> un code d'invitation est genere
+        // 3. L'admin active le compte de la Manman sol (endpoint reserve ADMIN)
+        mvc.perform(post("/api/admin/utilisateurs/" + manmanId + "/activer")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ACTIF"));
+
+        // 4. La Manman sol se connecte et cree un Sol
+        String manmanToken = connecter("50937111111", "motdepasse123");
         MvcResult solRes = mvc.perform(post("/api/sols")
-                        .header("X-User-Id", manmanId)
+                        .header("Authorization", "Bearer " + manmanToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nom":"Sol du quartier","description":"Test",
@@ -60,20 +62,30 @@ class ParcoursSolIntegrationTest {
         String code = champ(solRes, "codeInvitation");
         assertThat(code).isNotBlank();
 
-        // 5. Un membre s'inscrit puis rejoint le Sol grace au code
-        String membreId = idDe(inscrire("Paul", "Pierre", "50937222222",
-                "membre@sol.ht", "001-222", "MEMBRE"));
-
+        // 5. Un membre s'inscrit, se connecte et rejoint le Sol via le code
+        inscrire("Paul", "Pierre", "50937222222", "membre@sol.ht", "001-222", "MEMBRE");
+        String membreToken = connecter("50937222222", "motdepasse123");
         mvc.perform(post("/api/sols/rejoindre")
-                        .header("X-User-Id", membreId)
+                        .header("Authorization", "Bearer " + membreToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"codeInvitation\":\"" + code + "\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.ordrePassage").value(2)); // la Manman sol est en 1
+                .andExpect(jsonPath("$.ordrePassage").value(2));
 
-        // 6. Un mauvais code est refuse proprement (400 + message metier)
+        // 6. SECURITE : sans jeton -> acces refuse (401)
         mvc.perform(post("/api/sols/rejoindre")
-                        .header("X-User-Id", membreId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codeInvitation\":\"" + code + "\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // 7. SECURITE : un membre ne peut pas acceder a un endpoint admin (403)
+        mvc.perform(post("/api/admin/utilisateurs/" + manmanId + "/desactiver")
+                        .header("Authorization", "Bearer " + membreToken))
+                .andExpect(status().isForbidden());
+
+        // 8. Un mauvais code est refuse proprement (400 + message metier)
+        mvc.perform(post("/api/sols/rejoindre")
+                        .header("Authorization", "Bearer " + membreToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"codeInvitation\":\"XXXXXXXX\"}"))
                 .andExpect(status().isBadRequest())
@@ -93,8 +105,13 @@ class ParcoursSolIntegrationTest {
                 .andReturn();
     }
 
-    private String idDe(MvcResult res) throws Exception {
-        return champ(res, "id");
+    private String connecter(String telephone, String motDePasse) throws Exception {
+        MvcResult res = mvc.perform(post("/api/auth/connexion")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"telephone\":\"" + telephone + "\",\"motDePasse\":\"" + motDePasse + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return champ(res, "token");
     }
 
     private String champ(MvcResult res, String nom) throws Exception {

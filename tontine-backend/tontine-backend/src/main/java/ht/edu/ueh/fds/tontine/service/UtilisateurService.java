@@ -6,23 +6,19 @@ import ht.edu.ueh.fds.tontine.exception.BusinessException;
 import ht.edu.ueh.fds.tontine.repository.JetonReinitialisationRepository;
 import ht.edu.ueh.fds.tontine.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
 
 /**
  * Regles metier des comptes :
  * inscription, connexion, profil, activation/desactivation (admin),
  * et renouvellement de mot de passe par code SMS.
  *
- * NB : le hachage SHA-256 sale est provisoire ; il sera remplace par BCrypt
- * lors de l'ajout de Spring Security (couche API / securite).
+ * Les mots de passe sont haches en BCrypt (via {@link PasswordEncoder}).
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +29,7 @@ public class UtilisateurService {
 
     private final UtilisateurRepository utilisateurRepository;
     private final JetonReinitialisationRepository jetonRepository;
+    private final PasswordEncoder passwordEncoder;
 
     /** Cas « S'inscrire » : creation du compte (statut EN_ATTENTE jusqu'a activation). */
     @Transactional
@@ -49,7 +46,7 @@ public class UtilisateurService {
         if (motDePasseClair == null || motDePasseClair.length() < 8) {
             throw new BusinessException("Le mot de passe doit compter au moins 8 caracteres.");
         }
-        utilisateur.setMotDePasseHache(hacher(motDePasseClair));
+        utilisateur.setMotDePasseHache(passwordEncoder.encode(motDePasseClair));
         if (utilisateur.getRole() == null) {
             utilisateur.setRole("MEMBRE");
         }
@@ -61,7 +58,7 @@ public class UtilisateurService {
     public Utilisateur connecter(String telephone, String motDePasseClair) {
         Utilisateur utilisateur = utilisateurRepository.findByTelephone(telephone)
                 .orElseThrow(() -> new BusinessException("Identifiants incorrects."));
-        if (!utilisateur.getMotDePasseHache().equals(hacher(motDePasseClair))) {
+        if (!passwordEncoder.matches(motDePasseClair, utilisateur.getMotDePasseHache())) {
             throw new BusinessException("Identifiants incorrects.");
         }
         if ("BLOQUE".equals(utilisateur.getStatut())) {
@@ -129,7 +126,7 @@ public class UtilisateurService {
             throw new BusinessException("Le mot de passe doit compter au moins 8 caracteres.");
         }
         Utilisateur utilisateur = jeton.getUtilisateur();
-        utilisateur.setMotDePasseHache(hacher(nouveauMotDePasse));
+        utilisateur.setMotDePasseHache(passwordEncoder.encode(nouveauMotDePasse));
         utilisateurRepository.save(utilisateur);
         jeton.setUtilise(true);
         jetonRepository.save(jeton);
@@ -143,16 +140,6 @@ public class UtilisateurService {
     private void exigerAdmin(String adminId) {
         if (!"ADMIN".equals(exiger(adminId).getRole())) {
             throw new BusinessException("Cette action est reservee a l'administrateur.");
-        }
-    }
-
-    private String hacher(String motDePasse) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(motDePasse.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 indisponible", e);
         }
     }
 }
