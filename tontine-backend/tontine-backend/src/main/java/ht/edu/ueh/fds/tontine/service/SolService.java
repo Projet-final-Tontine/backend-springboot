@@ -147,6 +147,14 @@ public class SolService {
         return membreSolRepository.findBySolIdOrderByOrdrePassageAsc(solId);
     }
 
+    /** Liste des Sols auxquels participe l'utilisateur connecte. */
+    @Transactional(readOnly = true)
+    public List<Sol> solsDeLUtilisateur(String utilisateurId) {
+        return membreSolRepository.findByUtilisateurId(utilisateurId).stream()
+                .map(MembreSol::getSol)
+                .toList();
+    }
+
     /** Genere un code court, lisible et unique (ex : K7RT2MQ4). */
     private String genererCodeInvitationUnique() {
         String code;

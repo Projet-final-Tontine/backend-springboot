@@ -45,4 +45,18 @@ public class CotisationController {
         return cotisationService.historiqueMembre(membreSolId).stream()
                 .map(CotisationResponse::from).toList();
     }
+
+    /** Toutes les cotisations de l'utilisateur connecte (solde + transactions). */
+    @GetMapping("/mes-cotisations")
+    public List<CotisationResponse> mesCotisations(Principal principal) {
+        return cotisationService.historiqueUtilisateur(principal.getName()).stream()
+                .map(CotisationResponse::from).toList();
+    }
+
+    /** Paiements en attente de validation d'un Sol (Manman sol). */
+    @GetMapping("/sols/{solId}/paiements-en-attente")
+    public List<PaiementResponse> paiementsEnAttente(@PathVariable String solId) {
+        return cotisationService.paiementsEnAttenteDuSol(solId).stream()
+                .map(PaiementResponse::from).toList();
+    }
 }

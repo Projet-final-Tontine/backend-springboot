@@ -35,6 +35,14 @@ public class SolController {
                 .body(SolResponse.from(solService.creerSol(principal.getName(), sol)));
     }
 
+    /** Liste des Sols de l'utilisateur connecte. */
+    @GetMapping("/mes-sols")
+    public List<SolResponse> mesSols(Principal principal) {
+        return solService.solsDeLUtilisateur(principal.getName()).stream()
+                .map(SolResponse::from)
+                .toList();
+    }
+
     /** Rejoindre un Sol via le code d'invitation. */
     @PostMapping("/rejoindre")
     public ResponseEntity<MembreSolResponse> rejoindre(Principal principal,

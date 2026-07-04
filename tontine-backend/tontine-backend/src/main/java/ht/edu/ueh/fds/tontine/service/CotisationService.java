@@ -136,4 +136,19 @@ public class CotisationService {
     public List<Cotisation> historiqueMembre(String membreSolId) {
         return cotisationRepository.findByMembreSolIdOrderByDateEcheanceDesc(membreSolId);
     }
+
+    /** Toutes les cotisations de l'utilisateur connecte, tous Sols confondus. */
+    public List<Cotisation> historiqueUtilisateur(String utilisateurId) {
+        return membreSolRepository.findByUtilisateurId(utilisateurId).stream()
+                .flatMap(m -> cotisationRepository
+                        .findByMembreSolIdOrderByDateEcheanceDesc(m.getId()).stream())
+                .toList();
+    }
+
+    /** Paiements en attente de validation pour un Sol (Manman sol). */
+    public List<Paiement> paiementsEnAttenteDuSol(String solId) {
+        return paiementRepository.findByStatutPaiement("EN_ATTENTE").stream()
+                .filter(p -> p.getCotisation().getSol().getId().equals(solId))
+                .toList();
+    }
 }
