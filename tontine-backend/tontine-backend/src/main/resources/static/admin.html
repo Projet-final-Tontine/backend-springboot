@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration — Tontine Numérique</title>
+<style>
+  :root{
+    --violet:#5B3FD6; --violet-dark:#3A22A8; --violet-light:#8B72F0;
+    --lavande:#E7E2FA; --bg:#F4F3Fb; --surface:#fff;
+    --texte:#1D1B2E; --texte-doux:#6B7280;
+    --vert:#1B8A4E; --vert-bg:#E3F5EA;
+    --rouge:#D32F2F; --rouge-bg:#FCE8E8;
+    --or:#B8860B; --or-bg:#FBF3DD;
+    --ombre:0 4px 20px rgba(58,34,168,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+  body{background:var(--bg);color:var(--texte);min-height:100vh}
+
+  /* ---- Connexion ---- */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--violet-dark),var(--violet-light))}
+  .login-card{background:var(--surface);padding:40px;border-radius:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);width:100%;max-width:400px}
+  .logo{width:64px;height:64px;border-radius:50%;background:var(--lavande);
+    display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px}
+  .login-card h1{text-align:center;font-size:22px;color:var(--violet-dark);margin-bottom:4px}
+  .login-card p{text-align:center;color:var(--texte-doux);font-size:14px;margin-bottom:24px}
+
+  label{display:block;font-size:13px;color:var(--texte-doux);margin:12px 0 6px}
+  input{width:100%;padding:13px 14px;border:1.5px solid #E0DEEC;border-radius:12px;
+    font-size:15px;outline:none;transition:border .2s}
+  input:focus{border-color:var(--violet)}
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--violet);
+    color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-top:20px;transition:.2s}
+  .btn:hover{background:var(--violet-dark)}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+
+  .msg{padding:12px;border-radius:10px;font-size:14px;margin-top:16px;text-align:center;display:none}
+  .msg.err{background:var(--rouge-bg);color:var(--rouge);display:block}
+  .msg.ok{background:var(--vert-bg);color:var(--vert);display:block}
+
+  /* ---- Tableau de bord ---- */
+  #dashboard{display:none}
+  header{background:var(--surface);padding:18px 28px;box-shadow:var(--ombre);
+    display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+  header .logo{width:42px;height:42px;font-size:20px;margin:0}
+  header h1{font-size:18px;color:var(--violet-dark)}
+  header .role{font-size:12px;color:var(--texte-doux)}
+  header .spacer{flex:1}
+  .btn-sec{padding:9px 16px;border:1.5px solid var(--rouge);background:none;color:var(--rouge);
+    border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn-sec:hover{background:var(--rouge-bg)}
+
+  main{max-width:1100px;margin:0 auto;padding:28px 20px}
+  h2{font-size:16px;margin-bottom:14px;color:var(--texte)}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:28px}
+  .kpi{background:var(--surface);border-radius:18px;padding:20px;box-shadow:var(--ombre)}
+  .kpi .val{font-size:28px;font-weight:800;color:var(--violet-dark)}
+  .kpi .lbl{font-size:13px;color:var(--texte-doux);margin-top:2px}
+
+  .search{margin-bottom:16px}
+  .search input{max-width:340px}
+
+  .table-wrap{background:var(--surface);border-radius:18px;box-shadow:var(--ombre);overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:14px 16px;font-size:14px}
+  th{background:var(--lavande);color:var(--violet-dark);font-weight:600;font-size:12px;
+    text-transform:uppercase;letter-spacing:.03em}
+  tr:not(:last-child) td{border-bottom:1px solid #F0EEF8}
+  .badge{display:inline-block;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
+  .b-actif{background:var(--vert-bg);color:var(--vert)}
+  .b-bloque{background:var(--rouge-bg);color:var(--rouge)}
+  .b-attente{background:var(--or-bg);color:var(--or)}
+  .b-admin{background:var(--lavande);color:var(--violet-dark)}
+  .act{padding:7px 13px;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:#fff}
+  .act-on{background:var(--vert)} .act-off{background:var(--rouge)}
+  .act:hover{opacity:.9}
+  .vide{text-align:center;padding:40px;color:var(--texte-doux)}
+  @media(max-width:640px){
+    th:nth-child(4),td:nth-child(4){display:none}
+    main{padding:18px 12px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ CONNEXION ============ -->
+<div id="login">
+  <div class="login-card">
+    <div class="logo">🌅</div>
+    <h1>Espace Administration</h1>
+    <p>Tontine Numérique — accès réservé</p>
+    <label>Téléphone</label>
+    <input id="tel" type="text" placeholder="Ex : 50937000001" autocomplete="username">
+    <label>Mot de passe</label>
+    <input id="pwd" type="password" placeholder="Votre mot de passe" autocomplete="current-password">
+    <button class="btn" id="btn-login" onclick="seConnecter()">Se connecter</button>
+    <div class="msg" id="login-msg"></div>
+  </div>
+</div>
+
+<!-- ============ TABLEAU DE BORD ============ -->
+<div id="dashboard">
+  <header>
+    <div class="logo">🌅</div>
+    <div>
+      <h1>Tontine Numérique</h1>
+      <div class="role" id="qui">Administrateur</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn-sec" onclick="seDeconnecter()">Se déconnecter</button>
+  </header>
+
+  <main>
+    <div class="msg" id="dash-msg"></div>
+
+    <h2>Vue d'ensemble</h2>
+    <div class="kpis" id="kpis"></div>
+
+    <h2>Gestion des comptes</h2>
+    <div class="search">
+      <input id="recherche" type="text" placeholder="🔍 Rechercher un membre…" oninput="afficherTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Nom</th><th>Téléphone</th><th>Rôle</th><th>E-mail</th><th>Statut</th><th>Action</th></tr>
+        </thead>
+        <tbody id="corps"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Meme origine que le backend : les appels /api/... fonctionnent sans configuration.
+  const API = "";
+  let token = null;
+  let utilisateurs = [];
+
+  function afficherMsg(id, texte, type){
+    const el = document.getElementById(id);
+    el.textContent = texte;
+    el.className = "msg " + type;
+  }
+
+  async function seConnecter(){
+    const tel = document.getElementById("tel").value.trim();
+    const pwd = document.getElementById("pwd").value;
+    const btn = document.getElementById("btn-login");
+    if(!tel || !pwd){ afficherMsg("login-msg","Veuillez remplir les deux champs.","err"); return; }
+    btn.disabled = true; btn.textContent = "Connexion…";
+    try{
+      const r = await fetch(API + "/api/auth/connexion", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ telephone: tel, motDePasse: pwd })
+      });
+      const data = await r.json();
+      if(!r.ok){ throw new Error(data.message || "Identifiants incorrects."); }
+      if(data.utilisateur.role !== "ADMIN"){
+        throw new Error("Ce compte n'est pas administrateur.");
+      }
+      token = data.token;
+      document.getElementById("qui").textContent =
+        data.utilisateur.prenom + " " + data.utilisateur.nom + " · Administrateur";
+      document.getElementById("login").style.display = "none";
+      document.getElementById("dashboard").style.display = "block";
+      chargerTout();
+    }catch(e){
+      afficherMsg("login-msg", e.message, "err");
+    }finally{
+      btn.disabled = false; btn.textContent = "Se connecter";
+    }
+  }
+
+  function seDeconnecter(){
+    token = null; utilisateurs = [];
+    document.getElementById("dashboard").style.display = "none";
+    document.getElementById("login").style.display = "flex";
+    document.getElementById("pwd").value = "";
+    document.getElementById("login-msg").className = "msg";
+  }
+
+  function entetes(){ return { "Authorization": "Bearer " + token, "Content-Type":"application/json" }; }
+
+  async function chargerTout(){
+    await Promise.all([chargerStats(), chargerUtilisateurs()]);
+  }
+
+  async function chargerStats(){
+    try{
+      const r = await fetch(API + "/api/admin/stats", { headers: entetes() });
+      const s = await r.json();
+      const cartes = [
+        ["Utilisateurs", s.totalUtilisateurs],
+        ["Comptes actifs", s.comptesActifs],
+        ["En attente", s.comptesEnAttente],
+        ["Bloqués", s.comptesBloques],
+        ["Sols créés", s.totalSols],
+        ["Sols en cours", s.solsEnCours],
+      ];
+      document.getElementById("kpis").innerHTML = cartes.map(c =>
+        `<div class="kpi"><div class="val">${c[1] ?? 0}</div><div class="lbl">${c[0]}</div></div>`
+      ).join("");
+    }catch(e){ /* silencieux */ }
+  }
+
+  async function chargerUtilisateurs(){
+    try{
+      const r = await fetch(API + "/api/admin/utilisateurs", { headers: entetes() });
+      utilisateurs = await r.json();
+      afficherTable();
+    }catch(e){
+      afficherMsg("dash-msg","Impossible de charger les utilisateurs.","err");
+    }
+  }
+
+  function badge(statut){
+    if(statut === "ACTIF") return '<span class="badge b-actif">Actif</span>';
+    if(statut === "BLOQUE") return '<span class="badge b-bloque">Bloqué</span>';
+    return '<span class="badge b-attente">En attente</span>';
+  }
+
+  function afficherTable(){
+    const q = document.getElementById("recherche").value.toLowerCase();
+    const liste = utilisateurs.filter(u =>
+      !q || (u.prenom+" "+u.nom).toLowerCase().includes(q) ||
+      (u.telephone||"").includes(q) || (u.email||"").toLowerCase().includes(q));
+    const corps = document.getElementById("corps");
+    if(liste.length === 0){
+      corps.innerHTML = '<tr><td colspan="6" class="vide">Aucun utilisateur trouvé.</td></tr>';
+      return;
+    }
+    corps.innerHTML = liste.map(u => {
+      const roleBadge = u.role === "ADMIN"
+        ? '<span class="badge b-admin">Admin</span>' : u.role;
+      const estActif = u.statut === "ACTIF";
+      const bouton = u.role === "ADMIN"
+        ? "—"
+        : estActif
+          ? `<button class="act act-off" onclick="changerStatut('${u.id}','desactiver')">Désactiver</button>`
+          : `<button class="act act-on" onclick="changerStatut('${u.id}','activer')">Activer</button>`;
+      return `<tr>
+        <td><strong>${u.prenom} ${u.nom}</strong></td>
+        <td>${u.telephone||"—"}</td>
+        <td>${roleBadge}</td>
+        <td>${u.email||"—"}</td>
+        <td>${badge(u.statut)}</td>
+        <td>${bouton}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  async function changerStatut(id, action){
+    try{
+      const r = await fetch(API + "/api/admin/utilisateurs/" + id + "/" + action,
+        { method:"POST", headers: entetes() });
+      const data = await r.json();
+      if(!r.ok){ throw new Error(data.message || "Action refusée."); }
+      afficherMsg("dash-msg",
+        action === "activer" ? "Compte activé." : "Compte désactivé.", "ok");
+      chargerTout();
+      setTimeout(()=>{ document.getElementById("dash-msg").className="msg"; }, 2500);
+    }catch(e){
+      afficherMsg("dash-msg", e.message, "err");
+    }
+  }
+
+  // Entree = se connecter
+  document.getElementById("pwd").addEventListener("keydown", e => {
+    if(e.key === "Enter") seConnecter();
+  });
+</script>
+</body>
+</html>
