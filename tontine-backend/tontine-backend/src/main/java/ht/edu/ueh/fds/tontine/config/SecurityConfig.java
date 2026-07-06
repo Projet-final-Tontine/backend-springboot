@@ -50,8 +50,10 @@ public class SecurityConfig {
                         // Endpoints publics : pas besoin d'etre connecte.
                         .requestMatchers("/api/auth/inscription", "/api/auth/connexion").permitAll()
                         .requestMatchers("/api/auth/mot-de-passe/**").permitAll()
+                        // Photos de profil televersees, lisibles sans jeton.
+                        .requestMatchers("/uploads/**").permitAll()
                         // Page web d'administration (l'API interne reste protegee par jeton).
-                        .requestMatchers("/admin.html", "/", "/favicon.ico").permitAll()
+                        .requestMatchers("/admin.html", "/admin", "/").permitAll()
                         // Reserve a l'administrateur.
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Tout le reste exige un jeton valide.

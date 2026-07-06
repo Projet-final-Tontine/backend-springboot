@@ -35,3 +35,7 @@ bin/
 
 ### Environment ###
 .env
+
+# Photos perso - ne pas publier
+uploads/
+backend-log.txt

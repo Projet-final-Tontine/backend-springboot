@@ -40,14 +40,7 @@ public class UtilisateurService {
         if (utilisateurRepository.existsByEmail(utilisateur.getEmail())) {
             throw new BusinessException("Cet email est deja utilise.");
         }
-        // Le CIN/NIF est facultatif a l'inscription. S'il est fourni, il doit etre
-        // unique. S'il est vide, on genere une valeur de remplacement unique
-        // (basee sur le telephone, deja verifie plus haut) pour respecter la
-        // contrainte d'unicite de la base sans bloquer les inscriptions.
-        String cin = utilisateur.getCinNif();
-        if (cin == null || cin.isBlank()) {
-            utilisateur.setCinNif("SANS-CIN-" + utilisateur.getTelephone());
-        } else if (utilisateurRepository.existsByCinNif(cin)) {
+        if (utilisateurRepository.existsByCinNif(utilisateur.getCinNif())) {
             throw new BusinessException("Ce CIN/NIF est deja enregistre.");
         }
         if (motDePasseClair == null || motDePasseClair.length() < 8) {
@@ -57,13 +50,31 @@ public class UtilisateurService {
         if (utilisateur.getRole() == null) {
             utilisateur.setRole("MEMBRE");
         }
+        // Auto-activation a l'inscription : permet de creer/rejoindre un Sol
+        // immediatement. L'administrateur garde le pouvoir de bloquer un compte.
+        utilisateur.setStatut("ACTIF");
         return utilisateurRepository.save(utilisateur);
     }
 
-    /** Cas « Se connecter » : verification telephone + mot de passe. */
+    /** Cas « Changer son mot de passe » (utilisateur connecte). */
     @Transactional
-    public Utilisateur connecter(String telephone, String motDePasseClair) {
-        Utilisateur utilisateur = utilisateurRepository.findByTelephone(telephone)
+    public void changerMotDePasse(String utilisateurId, String ancien, String nouveau) {
+        Utilisateur utilisateur = exiger(utilisateurId);
+        if (ancien == null || !passwordEncoder.matches(ancien, utilisateur.getMotDePasseHache())) {
+            throw new BusinessException("L'ancien mot de passe est incorrect.");
+        }
+        if (nouveau == null || nouveau.length() < 8) {
+            throw new BusinessException("Le mot de passe doit compter au moins 8 caracteres.");
+        }
+        utilisateur.setMotDePasseHache(passwordEncoder.encode(nouveau));
+        utilisateurRepository.save(utilisateur);
+    }
+
+    /** Cas « Se connecter » : identifiant (e-mail ou telephone) + mot de passe. */
+    @Transactional
+    public Utilisateur connecter(String identifiant, String motDePasseClair) {
+        Utilisateur utilisateur = utilisateurRepository.findByTelephone(identifiant)
+                .or(() -> utilisateurRepository.findByEmail(identifiant))
                 .orElseThrow(() -> new BusinessException("Identifiants incorrects."));
         if (!passwordEncoder.matches(motDePasseClair, utilisateur.getMotDePasseHache())) {
             throw new BusinessException("Identifiants incorrects.");
@@ -83,7 +94,8 @@ public class UtilisateurService {
         if (nom != null && !nom.isBlank()) utilisateur.setNom(nom);
         if (prenom != null && !prenom.isBlank()) utilisateur.setPrenom(prenom);
         if (adresse != null && !adresse.isBlank()) utilisateur.setAdresse(adresse);
-        if (photoUrl != null) utilisateur.setPhotoUrl(photoUrl);
+        // photoUrl == null : on ne touche pas ; photoUrl vide : on efface la photo.
+        if (photoUrl != null) utilisateur.setPhotoUrl(photoUrl.isBlank() ? null : photoUrl);
         return utilisateurRepository.save(utilisateur);
     }
 
@@ -137,6 +149,11 @@ public class UtilisateurService {
         utilisateurRepository.save(utilisateur);
         jeton.setUtilise(true);
         jetonRepository.save(jeton);
+    }
+
+    /** Liste tous les utilisateurs (tableau de bord admin). */
+    public java.util.List<Utilisateur> listerTous() {
+        return utilisateurRepository.findAll();
     }
 
     private Utilisateur exiger(String id) {

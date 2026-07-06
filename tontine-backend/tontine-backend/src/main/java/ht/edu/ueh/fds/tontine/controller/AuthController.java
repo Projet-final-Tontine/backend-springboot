@@ -51,6 +51,15 @@ public class AuthController {
                 principal.getName(), req.nom(), req.prenom(), req.adresse(), req.photoUrl()));
     }
 
+    /** Changer son mot de passe (utilisateur connecte, ancien mot de passe requis). */
+    @PostMapping("/changer-mot-de-passe")
+    public Map<String, String> changerMotDePasse(Principal principal,
+                                                 @RequestBody ChangerMotDePasseRequest req) {
+        utilisateurService.changerMotDePasse(
+                principal.getName(), req.ancienMotDePasse(), req.nouveauMotDePasse());
+        return Map.of("message", "Mot de passe mis a jour avec succes.");
+    }
+
     @PostMapping("/mot-de-passe/demande")
     public Map<String, String> demanderReset(@RequestBody DemandeResetRequest req) {
         utilisateurService.demanderReinitialisation(req.telephone());

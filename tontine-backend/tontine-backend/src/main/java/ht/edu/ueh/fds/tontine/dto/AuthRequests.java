@@ -18,7 +18,8 @@ public final class AuthRequests {
             String cinNif,
             LocalDate dateNaissance,
             String motDePasse,
-            String role ) {
+            String role
+    ) {
     }
 
     public record ConnexionRequest(String telephone, String motDePasse) {
@@ -31,5 +32,8 @@ public final class AuthRequests {
     }
 
     public record ResetRequest(String code, String nouveauMotDePasse) {
+    }
+
+    public record ChangerMotDePasseRequest(String ancienMotDePasse, String nouveauMotDePasse) {
     }
 }
