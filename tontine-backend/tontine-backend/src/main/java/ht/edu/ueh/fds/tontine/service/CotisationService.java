@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -27,14 +28,19 @@ public class CotisationService {
     private final CotisationRepository cotisationRepository;
     private final PaiementRepository paiementRepository;
     private final MembreSolRepository membreSolRepository;
+    private final PortefeuilleService portefeuilleService;
 
     /**
-     * Cas « Payer le Sol (Cotisation) » :
-     * le membre declare son depot ; le paiement part en attente de validation.
-     * La reference Mon Cash sert de justificatif.
+     * Cas « Payer le Sol (Cotisation) » — depuis le portefeuille.
+     *
+     * Le montant est preleve directement sur le solde du membre : si le solde
+     * est insuffisant, l'operation est rejetee (le membre doit d'abord deposer).
+     * Les fonds etant centralises par la plateforme, la cotisation est reglee
+     * immediatement (statut VALIDE) sans validation manuelle de la Manman sol.
+     * Le parametre {@code reference} n'est plus requis (paiement interne).
      */
     @Transactional
-    public Paiement payerCotisation(String cotisationId, String utilisateurId, String referenceMonCash) {
+    public Paiement payerCotisation(String cotisationId, String utilisateurId, String reference) {
         Cotisation cotisation = cotisationRepository.findById(cotisationId)
                 .orElseThrow(() -> new BusinessException("Cotisation introuvable : " + cotisationId));
 
@@ -43,22 +49,32 @@ public class CotisationService {
             throw new BusinessException("Cette cotisation ne vous appartient pas.");
         }
         if ("VALIDE".equals(cotisation.getStatut())) {
-            throw new BusinessException("Cette cotisation est deja reglee et validee.");
+            throw new BusinessException("Cette cotisation est deja reglee.");
         }
-        if (referenceMonCash == null || referenceMonCash.isBlank()) {
-            throw new BusinessException("La reference de transaction Mon Cash est obligatoire.");
-        }
-        paiementRepository.findByReferenceTransaction(referenceMonCash).ifPresent(p -> {
-            throw new BusinessException("Cette reference Mon Cash a deja ete utilisee.");
-        });
 
-        return paiementRepository.save(Paiement.builder()
+        BigDecimal montant = cotisation.getMontantAttendu();
+
+        // Prelevement sur le portefeuille (rejet si solde insuffisant).
+        portefeuilleService.debiterCotisation(utilisateurId, montant,
+                "Cotisation " + cotisation.getSol().getNom());
+
+        // Trace du paiement, regle immediatement (la plateforme detient les fonds).
+        Paiement paiement = paiementRepository.save(Paiement.builder()
                 .cotisation(cotisation)
                 .utilisateur(membre.getUtilisateur())
                 .typePaiement("COTISATION")
-                .referenceTransaction(referenceMonCash)
-                .montantPaye(cotisation.getMontantAttendu())
+                .referenceTransaction("PORTEFEUILLE")
+                .montantPaye(montant)
+                .statutPaiement("SUCCES")
+                .dateValidation(LocalDateTime.now())
                 .build());
+
+        cotisation.setMontantPaye(montant);
+        cotisation.setStatut("VALIDE");
+        cotisation.setDatePaiementEffectif(LocalDateTime.now());
+        cotisationRepository.save(cotisation);
+
+        return paiement;
     }
 
     /**

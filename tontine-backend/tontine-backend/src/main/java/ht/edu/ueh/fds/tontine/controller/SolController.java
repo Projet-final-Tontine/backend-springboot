@@ -38,9 +38,7 @@ public class SolController {
     /** Liste des Sols de l'utilisateur connecte. */
     @GetMapping("/mes-sols")
     public List<SolResponse> mesSols(Principal principal) {
-        return solService.solsDeLUtilisateur(principal.getName()).stream()
-                .map(SolResponse::from)
-                .toList();
+        return solService.solsDeLUtilisateur(principal.getName());
     }
 
     /** Rejoindre un Sol via le code d'invitation. */
@@ -55,7 +53,7 @@ public class SolController {
     /** Demarrer le cycle (plus d'adhesion possible). */
     @PostMapping("/{solId}/demarrer")
     public SolResponse demarrer(Principal principal, @PathVariable String solId) {
-        return SolResponse.from(solService.demarrerCycle(principal.getName(), solId));
+        return solService.demarrerCycle(principal.getName(), solId);
     }
 
     /** Quitter un Sol. */
@@ -68,6 +66,6 @@ public class SolController {
     /** Liste des membres d'un Sol, dans l'ordre de la rotation. */
     @GetMapping("/{solId}/membres")
     public List<MembreSolResponse> membres(@PathVariable String solId) {
-        return solService.membresDuSol(solId).stream().map(MembreSolResponse::from).toList();
+        return solService.membresDuSol(solId);
     }
 }

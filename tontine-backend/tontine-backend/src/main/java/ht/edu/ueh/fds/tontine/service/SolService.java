@@ -4,6 +4,8 @@ import ht.edu.ueh.fds.tontine.entity.CaisseGarantie;
 import ht.edu.ueh.fds.tontine.entity.MembreSol;
 import ht.edu.ueh.fds.tontine.entity.Sol;
 import ht.edu.ueh.fds.tontine.entity.Utilisateur;
+import ht.edu.ueh.fds.tontine.dto.SolResponse;
+import ht.edu.ueh.fds.tontine.dto.MembreSolResponse;
 import ht.edu.ueh.fds.tontine.exception.BusinessException;
 import ht.edu.ueh.fds.tontine.repository.CaisseGarantieRepository;
 import ht.edu.ueh.fds.tontine.repository.MembreSolRepository;
@@ -127,9 +129,13 @@ public class SolService {
         membreSolRepository.save(membre);
     }
 
-    /** Demarre officiellement le cycle : plus aucune adhesion possible. */
+    /**
+     * Demarre officiellement le cycle : plus aucune adhesion possible.
+     * La reponse est construite ici, session ouverte, pour initialiser la
+     * relation paresseuse vers la Manman sol (sinon « no session »).
+     */
     @Transactional
-    public Sol demarrerCycle(String mamanSolId, String solId) {
+    public SolResponse demarrerCycle(String mamanSolId, String solId) {
         Sol sol = solRepository.findById(solId)
                 .orElseThrow(() -> new BusinessException("Sol introuvable : " + solId));
         if (!sol.getMamanSol().getId().equals(mamanSolId)) {
@@ -139,19 +145,33 @@ public class SolService {
             throw new BusinessException("Ce Sol n'est pas en attente de demarrage.");
         }
         sol.setStatut("EN_COURS");
-        return solRepository.save(sol);
+        return SolResponse.from(solRepository.save(sol));
     }
 
-    /** Les membres d'un Sol dans l'ordre de la rotation. */
-    public List<MembreSol> membresDuSol(String solId) {
-        return membreSolRepository.findBySolIdOrderByOrdrePassageAsc(solId);
-    }
-
-    /** Liste des Sols auxquels participe l'utilisateur connecte. */
+    /**
+     * Les membres d'un Sol dans l'ordre de la rotation.
+     * Conversion en DTO dans la transaction pour initialiser les relations
+     * paresseuses (utilisateur, sol) avant la fermeture de la session.
+     */
     @Transactional(readOnly = true)
-    public List<Sol> solsDeLUtilisateur(String utilisateurId) {
+    public List<MembreSolResponse> membresDuSol(String solId) {
+        return membreSolRepository.findBySolIdOrderByOrdrePassageAsc(solId).stream()
+                .map(MembreSolResponse::from)
+                .toList();
+    }
+
+    /**
+     * Liste des Sols auxquels participe l'utilisateur connecte.
+     * La conversion en {@link SolResponse} se fait ici, pendant que la session
+     * Hibernate est encore ouverte, afin d'initialiser les relations paresseuses
+     * (ex. la Manman sol). Sinon le controleur declenche « Could not initialize
+     * proxy - no session ».
+     */
+    @Transactional(readOnly = true)
+    public List<SolResponse> solsDeLUtilisateur(String utilisateurId) {
         return membreSolRepository.findByUtilisateurId(utilisateurId).stream()
                 .map(MembreSol::getSol)
+                .map(SolResponse::from)
                 .toList();
     }
 

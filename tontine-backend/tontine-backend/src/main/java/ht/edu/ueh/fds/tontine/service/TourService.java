@@ -33,6 +33,7 @@ public class TourService {
     private final CotisationRepository cotisationRepository;
     private final PaiementRepository paiementRepository;
     private final CotisationService cotisationService;
+    private final PortefeuilleService portefeuilleService;
 
     /**
      * Cas « Declencher le paiement » (Manman sol) :
@@ -104,12 +105,17 @@ public class TourService {
             throw new BusinessException("Aucune cotisation validee : la main est vide.");
         }
 
-        // Trace du versement de la main au beneficiaire (transfert Mon Cash).
+        // Versement de la main : la plateforme credite le portefeuille du
+        // beneficiaire. La Manman sol ne manipule jamais l'argent directement.
+        portefeuilleService.crediterGain(tour.getBeneficiaire().getId(), main,
+                "Gain de la main - " + sol.getNom() + " (tour " + tour.getNumeroTour() + ")");
+
+        // Trace du versement de la main au beneficiaire.
         paiementRepository.save(Paiement.builder()
                 .cotisation(cotisationRepository.findByTourId(tourId).get(0))
                 .utilisateur(tour.getBeneficiaire())
                 .typePaiement("VERSEMENT_MAIN")
-                .referenceTransaction(referenceMonCash)
+                .referenceTransaction("PORTEFEUILLE")
                 .montantPaye(main)
                 .statutPaiement("SUCCES")
                 .dateValidation(LocalDateTime.now())

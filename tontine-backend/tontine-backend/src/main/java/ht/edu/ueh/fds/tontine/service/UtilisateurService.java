@@ -40,7 +40,14 @@ public class UtilisateurService {
         if (utilisateurRepository.existsByEmail(utilisateur.getEmail())) {
             throw new BusinessException("Cet email est deja utilise.");
         }
-        if (utilisateurRepository.existsByCinNif(utilisateur.getCinNif())) {
+        // Le CIN/NIF est facultatif a l'inscription. S'il est fourni, il doit etre
+        // unique. S'il est vide, on genere une valeur de remplacement unique
+        // (basee sur le telephone, deja verifie plus haut) pour respecter la
+        // contrainte d'unicite de la base sans bloquer les inscriptions.
+        String cin = utilisateur.getCinNif();
+        if (cin == null || cin.isBlank()) {
+            utilisateur.setCinNif("SANS-CIN-" + utilisateur.getTelephone());
+        } else if (utilisateurRepository.existsByCinNif(cin)) {
             throw new BusinessException("Ce CIN/NIF est deja enregistre.");
         }
         if (motDePasseClair == null || motDePasseClair.length() < 8) {
