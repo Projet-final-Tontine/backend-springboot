@@ -27,7 +27,8 @@ public class MessageController {
     @PostMapping("/sols/{solId}/messages")
     public MessageResponse envoyerAuSol(Principal principal, @PathVariable String solId,
                                         @RequestBody EnvoyerMessageRequest req) {
-        return messageService.envoyerAuSol(principal.getName(), solId, req.contenu());
+        return messageService.envoyerAuSol(principal.getName(), solId,
+                req.contenu(), req.pieceJointeUrl(), req.typePiece());
     }
 
     // ----- Chat prive -----
@@ -40,6 +41,7 @@ public class MessageController {
     @PostMapping("/messages/prive/{destinataireId}")
     public MessageResponse envoyerPrive(Principal principal, @PathVariable String destinataireId,
                                         @RequestBody EnvoyerMessageRequest req) {
-        return messageService.envoyerPrive(principal.getName(), destinataireId, req.contenu());
+        return messageService.envoyerPrive(principal.getName(), destinataireId,
+                req.contenu(), req.pieceJointeUrl(), req.typePiece());
     }
 }

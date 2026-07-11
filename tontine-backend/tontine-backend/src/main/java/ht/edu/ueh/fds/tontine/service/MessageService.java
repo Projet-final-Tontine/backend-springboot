@@ -31,8 +31,9 @@ public class MessageService {
 
     /** Envoyer un message dans le chat de groupe d'un Sol (reserve aux membres). */
     @Transactional
-    public MessageResponse envoyerAuSol(String expediteurId, String solId, String contenu) {
-        String texte = nettoyer(contenu);
+    public MessageResponse envoyerAuSol(String expediteurId, String solId,
+                                        String contenu, String pieceJointeUrl, String typePiece) {
+        String texte = preparer(contenu, pieceJointeUrl);
         if (!membreSolRepository.existsByUtilisateurIdAndSolId(expediteurId, solId)) {
             throw new BusinessException("Vous n'etes pas membre de ce Sol.");
         }
@@ -41,6 +42,8 @@ public class MessageService {
                 .expediteur(expediteur)
                 .solId(solId)
                 .contenu(texte)
+                .pieceJointeUrl(vide(pieceJointeUrl))
+                .typePiece(vide(typePiece))
                 .build());
         return MessageResponse.from(message);
     }
@@ -59,8 +62,9 @@ public class MessageService {
 
     /** Envoyer un message prive a un autre utilisateur. */
     @Transactional
-    public MessageResponse envoyerPrive(String expediteurId, String destinataireId, String contenu) {
-        String texte = nettoyer(contenu);
+    public MessageResponse envoyerPrive(String expediteurId, String destinataireId,
+                                        String contenu, String pieceJointeUrl, String typePiece) {
+        String texte = preparer(contenu, pieceJointeUrl);
         if (expediteurId.equals(destinataireId)) {
             throw new BusinessException("Impossible de s'envoyer un message a soi-meme.");
         }
@@ -70,6 +74,8 @@ public class MessageService {
                 .expediteur(expediteur)
                 .destinataireId(destinataireId)
                 .contenu(texte)
+                .pieceJointeUrl(vide(pieceJointeUrl))
+                .typePiece(vide(typePiece))
                 .build());
         return MessageResponse.from(message);
     }
@@ -81,15 +87,25 @@ public class MessageService {
                 .map(MessageResponse::from).toList();
     }
 
-    private String nettoyer(String contenu) {
-        if (contenu == null || contenu.isBlank()) {
+    /**
+     * Valide et normalise le contenu. Un message peut etre vide de texte s'il
+     * porte une piece jointe (image ou document).
+     */
+    private String preparer(String contenu, String pieceJointeUrl) {
+        String texte = contenu == null ? "" : contenu.trim();
+        boolean aPiece = pieceJointeUrl != null && !pieceJointeUrl.isBlank();
+        if (texte.isEmpty() && !aPiece) {
             throw new BusinessException("Le message ne peut pas etre vide.");
         }
-        String texte = contenu.trim();
         if (texte.length() > LONGUEUR_MAX) {
             throw new BusinessException("Message trop long (max " + LONGUEUR_MAX + " caracteres).");
         }
         return texte;
+    }
+
+    /** Renvoie null pour une chaine vide/blanche (colonne laissee nulle). */
+    private String vide(String valeur) {
+        return (valeur == null || valeur.isBlank()) ? null : valeur.trim();
     }
 
     private Utilisateur exiger(String id) {

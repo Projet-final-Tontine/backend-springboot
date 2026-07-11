@@ -11,6 +11,8 @@ public record MessageResponse(
         String expediteurNom,
         String expediteurPhoto,
         String contenu,
+        String pieceJointeUrl,
+        String typePiece,
         LocalDateTime dateEnvoi
 ) {
     public static MessageResponse from(Message m) {
@@ -20,6 +22,8 @@ public record MessageResponse(
                 m.getExpediteur().getPrenom() + " " + m.getExpediteur().getNom(),
                 m.getExpediteur().getPhotoUrl(),
                 m.getContenu(),
+                m.getPieceJointeUrl(),
+                m.getTypePiece(),
                 m.getDateEnvoi());
     }
 }

@@ -338,6 +338,39 @@ public class SolService {
                 journal);
     }
 
+    /**
+     * Tous les tours (distributions) des Sols de l'utilisateur, avec la date
+     * prevue et le nom du beneficiaire. Sert au calendrier intelligent : les
+     * dates y sont marquees d'une couronne. Construit en transaction (relations
+     * paresseuses) pour eviter toute LazyInitializationException.
+     */
+    @Transactional(readOnly = true)
+    public List<ht.edu.ueh.fds.tontine.dto.MonTourResponse> toursDeLUtilisateur(String utilisateurId) {
+        var resultats = new java.util.ArrayList<ht.edu.ueh.fds.tontine.dto.MonTourResponse>();
+        var solsVus = new java.util.HashSet<String>();
+        for (var membre : membreSolRepository.findByUtilisateurId(utilisateurId)) {
+            Sol sol = membre.getSol();
+            if (sol == null || !solsVus.add(sol.getId())) {
+                continue;
+            }
+            for (Tour t : tourRepository.findBySolIdOrderByNumeroTourAsc(sol.getId())) {
+                if (t.getDatePrevue() == null) {
+                    continue;
+                }
+                var benef = t.getBeneficiaire();
+                resultats.add(new ht.edu.ueh.fds.tontine.dto.MonTourResponse(
+                        sol.getId(),
+                        sol.getNom(),
+                        t.getNumeroTour(),
+                        benef == null ? null : benef.getPrenom() + " " + benef.getNom(),
+                        benef != null && benef.getId().equals(utilisateurId),
+                        t.getDatePrevue(),
+                        t.getStatut()));
+            }
+        }
+        return resultats;
+    }
+
     /** Genere un code court, lisible et unique (ex : K7RT2MQ4). */
     private String genererCodeInvitationUnique() {
         String code;

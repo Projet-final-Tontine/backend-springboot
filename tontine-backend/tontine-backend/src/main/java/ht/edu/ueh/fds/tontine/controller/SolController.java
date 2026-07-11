@@ -48,6 +48,12 @@ public class SolController {
         return solService.detailDuSol(principal.getName(), solId);
     }
 
+    /** Tous les tours (distributions) des Sols de l'utilisateur — calendrier intelligent. */
+    @GetMapping("/mes-tours")
+    public List<ht.edu.ueh.fds.tontine.dto.MonTourResponse> mesTours(Principal principal) {
+        return solService.toursDeLUtilisateur(principal.getName());
+    }
+
     /** Rejoindre un Sol via le code d'invitation. */
     @PostMapping("/rejoindre")
     public ResponseEntity<MembreSolResponse> rejoindre(Principal principal,

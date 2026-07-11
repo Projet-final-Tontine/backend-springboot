@@ -7,14 +7,6 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
 
-/**
- * Un message de discussion.
- *
- * Deux usages :
- * - Chat de groupe d'un Sol : {@code solId} renseigne, {@code destinataireId} nul.
- * - Chat prive entre deux membres : {@code destinataireId} renseigne, {@code solId} nul.
- * Mappe la table {@code MESSAGE}.
- */
 @Entity
 @Table(name = "MESSAGE", indexes = {
         @Index(name = "idx_message_sol", columnList = "sol_id"),
@@ -36,16 +28,20 @@ public class Message {
     @JoinColumn(name = "expediteur_user_id", nullable = false)
     private Utilisateur expediteur;
 
-    /** Chat de groupe : identifiant du Sol (nul pour un message prive). */
     @Column(name = "sol_id", length = 36)
     private String solId;
 
-    /** Chat prive : destinataire (nul pour un message de groupe). */
     @Column(name = "destinataire_user_id", length = 36)
     private String destinataireId;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String contenu;
+
+    @Column(name = "piece_jointe_url", length = 512)
+    private String pieceJointeUrl;
+
+    @Column(name = "type_piece", length = 20)
+    private String typePiece;
 
     @CreationTimestamp
     @Column(name = "date_envoi", nullable = false, updatable = false)
