@@ -1,6 +1,7 @@
 package ht.edu.ueh.fds.tontine.controller;
 
 import ht.edu.ueh.fds.tontine.dto.MembreSolResponse;
+import ht.edu.ueh.fds.tontine.dto.SolDetailResponse;
 import ht.edu.ueh.fds.tontine.dto.SolRequests.*;
 import ht.edu.ueh.fds.tontine.dto.SolResponse;
 import ht.edu.ueh.fds.tontine.entity.Sol;
@@ -39,6 +40,12 @@ public class SolController {
     @GetMapping("/mes-sols")
     public List<SolResponse> mesSols(Principal principal) {
         return solService.solsDeLUtilisateur(principal.getName());
+    }
+
+    /** Detail complet d'un Sol : progression, tour en cours, cotisations, position. */
+    @GetMapping("/{solId}/detail")
+    public SolDetailResponse detail(Principal principal, @PathVariable String solId) {
+        return solService.detailDuSol(principal.getName(), solId);
     }
 
     /** Rejoindre un Sol via le code d'invitation. */

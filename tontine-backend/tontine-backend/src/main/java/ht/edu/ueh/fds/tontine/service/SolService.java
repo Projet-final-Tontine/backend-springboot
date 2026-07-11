@@ -6,10 +6,14 @@ import ht.edu.ueh.fds.tontine.entity.Sol;
 import ht.edu.ueh.fds.tontine.entity.Utilisateur;
 import ht.edu.ueh.fds.tontine.dto.SolResponse;
 import ht.edu.ueh.fds.tontine.dto.MembreSolResponse;
+import ht.edu.ueh.fds.tontine.dto.SolDetailResponse;
+import ht.edu.ueh.fds.tontine.entity.Tour;
 import ht.edu.ueh.fds.tontine.exception.BusinessException;
 import ht.edu.ueh.fds.tontine.repository.CaisseGarantieRepository;
+import ht.edu.ueh.fds.tontine.repository.CotisationRepository;
 import ht.edu.ueh.fds.tontine.repository.MembreSolRepository;
 import ht.edu.ueh.fds.tontine.repository.SolRepository;
+import ht.edu.ueh.fds.tontine.repository.TourRepository;
 import ht.edu.ueh.fds.tontine.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,8 @@ public class SolService {
     private final MembreSolRepository membreSolRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final CaisseGarantieRepository caisseGarantieRepository;
+    private final TourRepository tourRepository;
+    private final CotisationRepository cotisationRepository;
 
     /**
      * Cas « Creer un Sol » (Manman sol) :
@@ -173,6 +179,163 @@ public class SolService {
                 .map(MembreSol::getSol)
                 .map(SolResponse::from)
                 .toList();
+    }
+
+    /**
+     * Vue complete d'un Sol pour l'ecran de detail :
+     * progression du cycle, tour en cours, prochain beneficiaire,
+     * etat des cotisations de chaque membre et position de l'utilisateur.
+     * Toute la reponse est construite ici, session ouverte (relations paresseuses).
+     */
+    @Transactional(readOnly = true)
+    public SolDetailResponse detailDuSol(String utilisateurId, String solId) {
+        Sol sol = solRepository.findById(solId)
+                .orElseThrow(() -> new BusinessException("Sol introuvable : " + solId));
+
+        List<MembreSol> membresActifs = membreSolRepository
+                .findBySolIdOrderByOrdrePassageAsc(solId).stream()
+                .filter(m -> "ACTIF".equals(m.getStatutMembre()))
+                .toList();
+
+        List<Tour> tours = tourRepository.findBySolIdOrderByNumeroTourAsc(solId);
+        List<SolDetailResponse.TourInfo> toursInfo = tours.stream()
+                .map(t -> new SolDetailResponse.TourInfo(
+                        t.getId(), t.getNumeroTour(),
+                        t.getBeneficiaire().getId(),
+                        t.getBeneficiaire().getPrenom() + " " + t.getBeneficiaire().getNom(),
+                        t.getDatePrevue(), t.getStatut(), t.getMontantPotDistribue()))
+                .toList();
+
+        int toursJoues = (int) tours.stream()
+                .filter(t -> "CLOTURE".equals(t.getStatut())).count();
+
+        // Tour en cours de collecte (au plus un par Sol).
+        SolDetailResponse.TourInfo tourCourant = toursInfo.stream()
+                .filter(t -> "OUVERT".equals(t.statut()))
+                .findFirst().orElse(null);
+
+        // Qui a paye / qui doit encore payer pour le tour en cours.
+        List<SolDetailResponse.EtatCotisation> etats = tourCourant == null
+                ? List.of()
+                : cotisationRepository.findByTourId(tourCourant.id()).stream()
+                        .map(c -> new SolDetailResponse.EtatCotisation(
+                                c.getMembreSol().getUtilisateur().getId(),
+                                c.getMembreSol().getUtilisateur().getPrenom() + " "
+                                        + c.getMembreSol().getUtilisateur().getNom(),
+                                c.getMembreSol().getUtilisateur().getPhotoUrl(),
+                                c.getMembreSol().getOrdrePassage(),
+                                c.getMontantAttendu(), c.getStatut(), c.getDateEcheance()))
+                        .sorted(java.util.Comparator.comparing(
+                                e -> e.ordre() == null ? Integer.MAX_VALUE : e.ordre()))
+                        .toList();
+
+        // La rotation complete, avec avatars (affichage de la liste des membres).
+        List<SolDetailResponse.MembreInfo> membresInfo = membresActifs.stream()
+                .map(m -> new SolDetailResponse.MembreInfo(
+                        m.getUtilisateur().getId(),
+                        m.getUtilisateur().getPrenom() + " " + m.getUtilisateur().getNom(),
+                        m.getUtilisateur().getPhotoUrl(),
+                        m.getOrdrePassage(),
+                        m.getStatutMembre()))
+                .toList();
+
+        // Position de l'utilisateur connecte dans la rotation.
+        SolDetailResponse.PositionMembre maPosition = membresActifs.stream()
+                .filter(m -> m.getUtilisateur().getId().equals(utilisateurId))
+                .findFirst()
+                .map(m -> {
+                    int ordre = m.getOrdrePassage() == null ? 0 : m.getOrdrePassage();
+                    // Date reelle si le tour existe deja, sinon estimation
+                    // a partir de la date de debut et de la frequence.
+                    var tourDuMembre = tours.stream()
+                            .filter(t -> t.getNumeroTour() != null && t.getNumeroTour() == ordre)
+                            .findFirst();
+                    java.time.LocalDate date;
+                    boolean estimee;
+                    if (tourDuMembre.isPresent()) {
+                        date = tourDuMembre.get().getDatePrevue();
+                        estimee = false;
+                    } else if (sol.getDateDebut() != null && ordre > 0) {
+                        date = "HEBDOMADAIRE".equalsIgnoreCase(sol.getFrequence())
+                                ? sol.getDateDebut().plusWeeks(ordre - 1L)
+                                : sol.getDateDebut().plusMonths(ordre - 1L);
+                        estimee = true;
+                    } else {
+                        date = null;
+                        estimee = true;
+                    }
+                    return new SolDetailResponse.PositionMembre(
+                            ordre, membresActifs.size(), date, estimee);
+                })
+                .orElse(null);
+
+        // ----- Sante du Sol : ponctualite des cotisations arrivees a echeance -----
+        var toutesCotisations = cotisationRepository.findBySolId(solId);
+        var aujourdHui = java.time.LocalDate.now();
+        int evaluees = 0;
+        int reglesATemps = 0;
+        for (var c : toutesCotisations) {
+            boolean payee = "VALIDE".equals(c.getStatut());
+            boolean echue = c.getDateEcheance() != null && c.getDateEcheance().isBefore(aujourdHui);
+            if (payee || echue) {
+                evaluees++;
+                if (payee && (c.getDatePaiementEffectif() == null
+                        || !c.getDatePaiementEffectif().toLocalDate().isAfter(c.getDateEcheance()))) {
+                    reglesATemps++;
+                }
+            }
+        }
+        int scoreSante = evaluees == 0 ? 100 : (reglesATemps * 100) / evaluees;
+        String niveauSante = scoreSante >= 80 ? "EXCELLENT" : scoreSante >= 50 ? "MOYEN" : "RISQUE";
+        var sante = new SolDetailResponse.SanteSol(scoreSante, niveauSante);
+
+        // ----- Journal automatique : deduit des donnees, sans table dediee -----
+        var journal = new java.util.ArrayList<SolDetailResponse.EvenementJournal>();
+        for (var m : membresActifs) {
+            if (m.getDateAdhesion() != null) {
+                journal.add(new SolDetailResponse.EvenementJournal(
+                        m.getDateAdhesion(), "ADHESION",
+                        m.getUtilisateur().getPrenom() + " " + m.getUtilisateur().getNom(), null));
+            }
+        }
+        for (var c : toutesCotisations) {
+            String nom = c.getMembreSol().getUtilisateur().getPrenom() + " "
+                    + c.getMembreSol().getUtilisateur().getNom();
+            if ("VALIDE".equals(c.getStatut()) && c.getDatePaiementEffectif() != null) {
+                journal.add(new SolDetailResponse.EvenementJournal(
+                        c.getDatePaiementEffectif(), "PAIEMENT", nom, c.getMontantPaye()));
+            } else if (!"VALIDE".equals(c.getStatut())
+                    && c.getDateEcheance() != null && c.getDateEcheance().isBefore(aujourdHui)) {
+                journal.add(new SolDetailResponse.EvenementJournal(
+                        c.getDateEcheance().atStartOfDay(), "RETARD", nom, c.getMontantAttendu()));
+            }
+        }
+        for (var t : tours) {
+            String beneficiaire = t.getBeneficiaire().getPrenom() + " " + t.getBeneficiaire().getNom();
+            if (t.getDateCreation() != null) {
+                journal.add(new SolDetailResponse.EvenementJournal(
+                        t.getDateCreation(), "TOUR_OUVERT", "n°" + t.getNumeroTour(), null));
+            }
+            if ("CLOTURE".equals(t.getStatut()) && t.getDateEffectiveDistribution() != null) {
+                journal.add(new SolDetailResponse.EvenementJournal(
+                        t.getDateEffectiveDistribution(), "MAIN", beneficiaire, t.getMontantPotDistribue()));
+            }
+        }
+        journal.sort(java.util.Comparator.comparing(
+                SolDetailResponse.EvenementJournal::date).reversed());
+
+        return new SolDetailResponse(
+                SolResponse.from(sol),
+                membresActifs.size(),
+                toursJoues,
+                membresActifs.size(),
+                tourCourant,
+                toursInfo,
+                etats,
+                membresInfo,
+                maPosition,
+                sante,
+                journal);
     }
 
     /** Genere un code court, lisible et unique (ex : K7RT2MQ4). */
