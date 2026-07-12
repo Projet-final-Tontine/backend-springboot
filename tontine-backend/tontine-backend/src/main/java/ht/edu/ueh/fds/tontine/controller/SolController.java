@@ -78,8 +78,8 @@ public class SolController {
 
     /** Liste des membres d'un Sol, dans l'ordre de la rotation. */
     @GetMapping("/{solId}/membres")
-    public List<MembreSolResponse> membres(@PathVariable String solId) {
-        return solService.membresDuSol(solId);
+    public List<MembreSolResponse> membres(Principal principal, @PathVariable String solId) {
+        return solService.membresDuSol(principal.getName(), solId);
     }
 
     /** Demandes d'adhesion en attente (Manman sol). */

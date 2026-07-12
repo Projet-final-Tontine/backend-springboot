@@ -98,9 +98,21 @@ public class SolService {
         if (!"OUVERT".equals(sol.getStatut())) {
             throw new BusinessException("Ce Sol n'accepte plus de nouveaux membres (cycle demarre ou termine).");
         }
-        if (membreSolRepository.existsByUtilisateurIdAndSolId(utilisateurId, sol.getId())) {
-            throw new BusinessException("Vous etes deja membre de ce Sol.");
+
+        // Une participation existe deja ? Selon son statut, on informe ou on
+        // reutilise l'enregistrement (un membre REFUSE ou PARTI peut re-soumettre
+        // une demande ; on respecte ainsi la contrainte d'unicite user_id+sol_id).
+        var existante = membreSolRepository.findByUtilisateurIdAndSolId(utilisateurId, sol.getId());
+        if (existante.isPresent()) {
+            String statut = existante.get().getStatutMembre();
+            if ("ACTIF".equals(statut)) {
+                throw new BusinessException("Vous etes deja membre de ce Sol.");
+            }
+            if ("EN_ATTENTE".equals(statut)) {
+                throw new BusinessException("Votre demande est deja en attente d'approbation.");
+            }
         }
+
         long actifs = membreSolRepository.countBySolIdAndStatutMembre(sol.getId(), "ACTIF");
         if (actifs >= sol.getNombreMaxMembres()) {
             throw new BusinessException("Ce Sol est complet.");
@@ -108,12 +120,13 @@ public class SolService {
 
         // La demande reste EN_ATTENTE : la Manman sol doit l'approuver.
         // L'ordre de passage n'est attribue qu'a l'approbation.
-        return membreSolRepository.save(MembreSol.builder()
+        MembreSol demande = existante.orElseGet(() -> MembreSol.builder()
                 .utilisateur(utilisateur)
                 .sol(sol)
-                .statutMembre("EN_ATTENTE")
-                .ordrePassage(null)
                 .build());
+        demande.setStatutMembre("EN_ATTENTE");
+        demande.setOrdrePassage(null);
+        return membreSolRepository.save(demande);
     }
 
     /**
@@ -214,10 +227,36 @@ public class SolService {
      * paresseuses (utilisateur, sol) avant la fermeture de la session.
      */
     @Transactional(readOnly = true)
-    public List<MembreSolResponse> membresDuSol(String solId) {
+    public List<MembreSolResponse> membresDuSol(String utilisateurId, String solId) {
+        Sol sol = solRepository.findById(solId)
+                .orElseThrow(() -> new BusinessException("Sol introuvable : " + solId));
+        verifierAccesAuSol(utilisateurId, sol);
+        // Seuls les membres reellement dans la rotation (ACTIF) sont listes ;
+        // les demandes EN_ATTENTE et les refus n'apparaissent pas ici.
         return membreSolRepository.findBySolIdOrderByOrdrePassageAsc(solId).stream()
+                .filter(m -> "ACTIF".equals(m.getStatutMembre()))
                 .map(MembreSolResponse::from)
                 .toList();
+    }
+
+    /**
+     * Verrouille l'acces en lecture a un Sol. Seules la Manman sol et les
+     * participations non exclues (ACTIF ou EN_ATTENTE) sont autorisees.
+     * Un membre REFUSE ou PARTI, ou un non-membre, est rejete : il ne doit plus
+     * voir le detail, la liste des membres, le chat ni les sondages.
+     */
+    private void verifierAccesAuSol(String utilisateurId, Sol sol) {
+        if (sol.getMamanSol() != null
+                && sol.getMamanSol().getId().equals(utilisateurId)) {
+            return;
+        }
+        String statut = membreSolRepository
+                .findByUtilisateurIdAndSolId(utilisateurId, sol.getId())
+                .map(MembreSol::getStatutMembre)
+                .orElse(null);
+        if (!"ACTIF".equals(statut) && !"EN_ATTENTE".equals(statut)) {
+            throw new BusinessException("Vous n'avez pas acces a ce Sol.");
+        }
     }
 
     /**
@@ -226,10 +265,14 @@ public class SolService {
      * Hibernate est encore ouverte, afin d'initialiser les relations paresseuses
      * (ex. la Manman sol). Sinon le controleur declenche « Could not initialize
      * proxy - no session ».
+     * Les participations REFUSE (refusee par la Manman sol) et PARTI (l'utilisateur
+     * a quitte) sont exclues : le Sol disparait alors de la liste de l'utilisateur.
      */
     @Transactional(readOnly = true)
     public List<SolResponse> solsDeLUtilisateur(String utilisateurId) {
         return membreSolRepository.findByUtilisateurId(utilisateurId).stream()
+                .filter(m -> !"REFUSE".equals(m.getStatutMembre())
+                        && !"PARTI".equals(m.getStatutMembre()))
                 .map(MembreSol::getSol)
                 .map(SolResponse::from)
                 .toList();
@@ -245,6 +288,7 @@ public class SolService {
     public SolDetailResponse detailDuSol(String utilisateurId, String solId) {
         Sol sol = solRepository.findById(solId)
                 .orElseThrow(() -> new BusinessException("Sol introuvable : " + solId));
+        verifierAccesAuSol(utilisateurId, sol);
 
         List<MembreSol> membresActifs = membreSolRepository
                 .findBySolIdOrderByOrdrePassageAsc(solId).stream()
@@ -403,6 +447,11 @@ public class SolService {
         var resultats = new java.util.ArrayList<ht.edu.ueh.fds.tontine.dto.MonTourResponse>();
         var solsVus = new java.util.HashSet<String>();
         for (var membre : membreSolRepository.findByUtilisateurId(utilisateurId)) {
+            // Un Sol refuse ou quitte ne doit plus apparaitre dans le calendrier.
+            if ("REFUSE".equals(membre.getStatutMembre())
+                    || "PARTI".equals(membre.getStatutMembre())) {
+                continue;
+            }
             Sol sol = membre.getSol();
             if (sol == null || !solsVus.add(sol.getId())) {
                 continue;

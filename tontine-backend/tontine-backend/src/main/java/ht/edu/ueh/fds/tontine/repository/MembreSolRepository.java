@@ -21,6 +21,14 @@ public interface MembreSolRepository extends JpaRepository<MembreSol, String> {
 
     boolean existsByUtilisateurIdAndSolId(String utilisateurId, String solId);
 
+    /**
+     * Vrai si l'utilisateur participe au Sol avec un statut precis (ex : ACTIF).
+     * Sert au controle d'acces : un membre REFUSE ou EN_ATTENTE ne doit pas
+     * pouvoir lire le chat, voter ou consulter le detail comme un membre actif.
+     */
+    boolean existsByUtilisateurIdAndSolIdAndStatutMembre(
+            String utilisateurId, String solId, String statutMembre);
+
     /** Nombre de places occupees dans un Sol (pour verifier nombre_max_membres). */
     long countBySolId(String solId);
 

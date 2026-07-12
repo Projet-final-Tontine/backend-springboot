@@ -1,12 +1,15 @@
 package ht.edu.ueh.fds.tontine.controller;
 
 import ht.edu.ueh.fds.tontine.dto.EnvoyerMessageRequest;
+import ht.edu.ueh.fds.tontine.dto.MessageRecentResponse;
 import ht.edu.ueh.fds.tontine.dto.MessageResponse;
 import ht.edu.ueh.fds.tontine.service.MessageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /** Endpoints de la messagerie : chat de groupe d'un Sol et chat prive. */
@@ -43,5 +46,16 @@ public class MessageController {
                                         @RequestBody EnvoyerMessageRequest req) {
         return messageService.envoyerPrive(principal.getName(), destinataireId,
                 req.contenu(), req.pieceJointeUrl(), req.typePiece());
+    }
+
+    // ----- Notifications : messages recents destines a l'utilisateur -----
+
+    @GetMapping("/messages/recents")
+    public List<MessageRecentResponse> messagesRecents(
+            Principal principal,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime depuis) {
+        LocalDateTime borne = depuis != null ? depuis : LocalDateTime.now().minusDays(1);
+        return messageService.messagesRecents(principal.getName(), borne);
     }
 }

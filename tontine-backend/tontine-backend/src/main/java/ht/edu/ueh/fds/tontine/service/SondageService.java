@@ -34,7 +34,7 @@ public class SondageService {
     /** Cree un sondage (reserve aux membres du Sol). */
     @Transactional
     public SondageResponse creer(String userId, String solId, String question, List<String> options) {
-        if (!membreSolRepository.existsByUtilisateurIdAndSolId(userId, solId)) {
+        if (!membreSolRepository.existsByUtilisateurIdAndSolIdAndStatutMembre(userId, solId, "ACTIF")) {
             throw new BusinessException("Vous n'etes pas membre de ce Sol.");
         }
         if (question == null || question.isBlank()) {
@@ -64,7 +64,7 @@ public class SondageService {
     /** Sondages d'un Sol (reserve aux membres). */
     @Transactional(readOnly = true)
     public List<SondageResponse> duSol(String userId, String solId) {
-        if (!membreSolRepository.existsByUtilisateurIdAndSolId(userId, solId)) {
+        if (!membreSolRepository.existsByUtilisateurIdAndSolIdAndStatutMembre(userId, solId, "ACTIF")) {
             throw new BusinessException("Vous n'etes pas membre de ce Sol.");
         }
         return sondageRepository.findBySolIdOrderByDateCreationDesc(solId).stream()
@@ -77,7 +77,7 @@ public class SondageService {
     public SondageResponse voter(String userId, String sondageId, Integer optionIndex) {
         Sondage s = sondageRepository.findById(sondageId)
                 .orElseThrow(() -> new BusinessException("Sondage introuvable."));
-        if (!membreSolRepository.existsByUtilisateurIdAndSolId(userId, s.getSolId())) {
+        if (!membreSolRepository.existsByUtilisateurIdAndSolIdAndStatutMembre(userId, s.getSolId(), "ACTIF")) {
             throw new BusinessException("Vous n'etes pas membre de ce Sol.");
         }
         if (!"OUVERT".equals(s.getStatut())) {
