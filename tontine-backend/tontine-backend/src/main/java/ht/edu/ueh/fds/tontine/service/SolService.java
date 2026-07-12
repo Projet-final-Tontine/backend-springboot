@@ -101,16 +101,70 @@ public class SolService {
         if (membreSolRepository.existsByUtilisateurIdAndSolId(utilisateurId, sol.getId())) {
             throw new BusinessException("Vous etes deja membre de ce Sol.");
         }
-        long placesOccupees = membreSolRepository.countBySolId(sol.getId());
-        if (placesOccupees >= sol.getNombreMaxMembres()) {
+        long actifs = membreSolRepository.countBySolIdAndStatutMembre(sol.getId(), "ACTIF");
+        if (actifs >= sol.getNombreMaxMembres()) {
             throw new BusinessException("Ce Sol est complet.");
         }
 
+        // La demande reste EN_ATTENTE : la Manman sol doit l'approuver.
+        // L'ordre de passage n'est attribue qu'a l'approbation.
         return membreSolRepository.save(MembreSol.builder()
                 .utilisateur(utilisateur)
                 .sol(sol)
-                .ordrePassage((int) placesOccupees + 1)
+                .statutMembre("EN_ATTENTE")
+                .ordrePassage(null)
                 .build());
+    }
+
+    /**
+     * Demandes d'adhesion en attente d'un Sol (reserve a la Manman sol).
+     */
+    @Transactional(readOnly = true)
+    public List<MembreSolResponse> demandesEnAttente(String mamanSolId, String solId) {
+        Sol sol = solRepository.findById(solId)
+                .orElseThrow(() -> new BusinessException("Sol introuvable : " + solId));
+        if (!sol.getMamanSol().getId().equals(mamanSolId)) {
+            throw new BusinessException("Seule la Manman sol peut voir les demandes.");
+        }
+        return membreSolRepository.findBySolIdAndStatutMembre(solId, "EN_ATTENTE").stream()
+                .map(MembreSolResponse::from)
+                .toList();
+    }
+
+    /** Approuve une demande d'adhesion : le membre devient ACTIF avec un ordre. */
+    @Transactional
+    public MembreSolResponse approuverMembre(String mamanSolId, String membreSolId) {
+        MembreSol membre = membreSolRepository.findById(membreSolId)
+                .orElseThrow(() -> new BusinessException("Demande introuvable."));
+        Sol sol = membre.getSol();
+        if (!sol.getMamanSol().getId().equals(mamanSolId)) {
+            throw new BusinessException("Seule la Manman sol peut approuver une demande.");
+        }
+        if (!"EN_ATTENTE".equals(membre.getStatutMembre())) {
+            throw new BusinessException("Cette demande a deja ete traitee.");
+        }
+        long actifs = membreSolRepository.countBySolIdAndStatutMembre(sol.getId(), "ACTIF");
+        if (actifs >= sol.getNombreMaxMembres()) {
+            throw new BusinessException("Ce Sol est complet.");
+        }
+        membre.setStatutMembre("ACTIF");
+        membre.setOrdrePassage((int) actifs + 1);
+        return MembreSolResponse.from(membreSolRepository.save(membre));
+    }
+
+    /** Refuse une demande d'adhesion (le membre ne rejoint pas le Sol). */
+    @Transactional
+    public void refuserMembre(String mamanSolId, String membreSolId) {
+        MembreSol membre = membreSolRepository.findById(membreSolId)
+                .orElseThrow(() -> new BusinessException("Demande introuvable."));
+        if (!membre.getSol().getMamanSol().getId().equals(mamanSolId)) {
+            throw new BusinessException("Seule la Manman sol peut refuser une demande.");
+        }
+        if (!"EN_ATTENTE".equals(membre.getStatutMembre())) {
+            throw new BusinessException("Cette demande a deja ete traitee.");
+        }
+        membre.setStatutMembre("REFUSE");
+        membreSolRepository.save(membre);
     }
 
     /**

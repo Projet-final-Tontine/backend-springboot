@@ -81,4 +81,23 @@ public class SolController {
     public List<MembreSolResponse> membres(@PathVariable String solId) {
         return solService.membresDuSol(solId);
     }
+
+    /** Demandes d'adhesion en attente (Manman sol). */
+    @GetMapping("/{solId}/demandes")
+    public List<MembreSolResponse> demandes(Principal principal, @PathVariable String solId) {
+        return solService.demandesEnAttente(principal.getName(), solId);
+    }
+
+    /** Approuver une demande d'adhesion (Manman sol). */
+    @PostMapping("/membres/{membreSolId}/approuver")
+    public MembreSolResponse approuver(Principal principal, @PathVariable String membreSolId) {
+        return solService.approuverMembre(principal.getName(), membreSolId);
+    }
+
+    /** Refuser une demande d'adhesion (Manman sol). */
+    @PostMapping("/membres/{membreSolId}/refuser")
+    public ResponseEntity<Void> refuser(Principal principal, @PathVariable String membreSolId) {
+        solService.refuserMembre(principal.getName(), membreSolId);
+        return ResponseEntity.noContent().build();
+    }
 }

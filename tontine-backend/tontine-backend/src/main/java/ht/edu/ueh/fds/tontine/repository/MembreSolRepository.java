@@ -24,6 +24,9 @@ public interface MembreSolRepository extends JpaRepository<MembreSol, String> {
     /** Nombre de places occupees dans un Sol (pour verifier nombre_max_membres). */
     long countBySolId(String solId);
 
+    /** Nombre de membres d'un Sol dans un statut donne (ex : ACTIF). */
+    long countBySolIdAndStatutMembre(String solId, String statutMembre);
+
     /** Membres defaillants d'un Sol (pour l'alerte impaye). */
     List<MembreSol> findBySolIdAndStatutMembre(String solId, String statutMembre);
 }
