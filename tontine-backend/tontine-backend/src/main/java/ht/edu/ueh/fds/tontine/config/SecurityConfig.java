@@ -52,6 +52,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/mot-de-passe/**").permitAll()
                         // Photos de profil televersees, lisibles sans jeton.
                         .requestMatchers("/uploads/**").permitAll()
+                        // Verification publique d'un certificat de fiabilite (scan QR par une banque).
+                        .requestMatchers("/api/releve/verifier/**").permitAll()
                         // Page web d'administration (l'API interne reste protegee par jeton).
                         .requestMatchers("/admin.html", "/admin", "/").permitAll()
                         // Reserve a l'administrateur.
