@@ -99,6 +99,37 @@ public class PortefeuilleService {
         return p;
     }
 
+    /** Debit generique du portefeuille (ex : contribution au Fon Sekou). */
+    @Transactional
+    public Portefeuille debiter(String utilisateurId, BigDecimal montant, String type, String description) {
+        if (montant == null || montant.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Le montant a debiter doit etre positif.");
+        }
+        Portefeuille p = getOuCreer(utilisateurId);
+        if (p.getSolde().compareTo(montant) < 0) {
+            throw new BusinessException("Solde insuffisant. Veuillez deposer de l'argent d'abord.");
+        }
+        BigDecimal nouveauSolde = p.getSolde().subtract(montant);
+        p.setSolde(nouveauSolde);
+        portefeuilleRepository.save(p);
+        enregistrer(p, type, "DEBIT", montant, nouveauSolde, null, description);
+        return p;
+    }
+
+    /** Credit generique du portefeuille (ex : secours du Fon Sekou). */
+    @Transactional
+    public Portefeuille crediter(String utilisateurId, BigDecimal montant, String type, String description) {
+        if (montant == null || montant.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Le montant a crediter doit etre positif.");
+        }
+        Portefeuille p = getOuCreer(utilisateurId);
+        BigDecimal nouveauSolde = p.getSolde().add(montant);
+        p.setSolde(nouveauSolde);
+        portefeuilleRepository.save(p);
+        enregistrer(p, type, "CREDIT", montant, nouveauSolde, null, description);
+        return p;
+    }
+
     /** Credite le portefeuille du beneficiaire lors du versement de la « main ». */
     @Transactional
     public Portefeuille crediterGain(String utilisateurId, BigDecimal montant, String description) {
