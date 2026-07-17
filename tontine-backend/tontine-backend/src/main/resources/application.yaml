@@ -34,3 +34,10 @@ app:
     secret: ${JWT_SECRET:changez-cette-cle-secrete-tontine-sol-en-ligne-2026-fds-ueh}
     # Duree de validite d'un jeton : 24 heures (en millisecondes).
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  firebase:
+    # Connexion « Continuer avec Google » (facultatif).
+    # Chemin du fichier de cle de service Firebase (JSON) : laisser vide desactive
+    # simplement la connexion Google, sans impacter le reste de l'application.
+    credentials-path: ${FIREBASE_CREDENTIALS:}
+    # Identifiant du projet Firebase (facultatif si present dans la cle de service).
+    project-id: ${FIREBASE_PROJECT_ID:}

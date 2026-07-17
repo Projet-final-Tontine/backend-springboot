@@ -25,6 +25,10 @@ public final class AuthRequests {
     public record ConnexionRequest(String telephone, String motDePasse) {
     }
 
+    /** Requête « Continuer avec Google » : le jeton d'identité Firebase. */
+    public record GoogleAuthRequest(String idToken) {
+    }
+
     public record ModifierProfilRequest(String nom, String prenom, String adresse, String photoUrl) {
     }
 

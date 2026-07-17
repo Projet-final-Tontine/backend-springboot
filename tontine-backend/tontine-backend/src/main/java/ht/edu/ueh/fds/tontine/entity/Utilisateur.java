@@ -68,6 +68,18 @@ public class Utilisateur {
     @Column(nullable = false, length = 20)
     private String role;
 
+    /**
+     * Méthode d'authentification du compte : {@code LOCAL} (email + mot de passe)
+     * ou {@code GOOGLE}. Nullable pour ne pas casser les comptes existants
+     * (une valeur nulle est traitée comme LOCAL).
+     */
+    @Column(name = "auth_provider", length = 20)
+    private String authProvider;
+
+    /** Identifiant Firebase (uid) pour un compte lié à Google. */
+    @Column(name = "google_uid", unique = true, length = 128)
+    private String googleUid;
+
     /** Sert a la purge automatique des comptes inactifs (> 1 an). */
     @Column(name = "derniere_connexion")
     private LocalDateTime derniereConnexion;

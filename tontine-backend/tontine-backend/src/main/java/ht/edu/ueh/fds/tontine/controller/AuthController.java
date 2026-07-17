@@ -4,6 +4,7 @@ import ht.edu.ueh.fds.tontine.dto.AuthRequests.*;
 import ht.edu.ueh.fds.tontine.dto.ConnexionResponse;
 import ht.edu.ueh.fds.tontine.dto.UtilisateurResponse;
 import ht.edu.ueh.fds.tontine.entity.Utilisateur;
+import ht.edu.ueh.fds.tontine.security.FirebaseService;
 import ht.edu.ueh.fds.tontine.security.JwtService;
 import ht.edu.ueh.fds.tontine.service.UtilisateurService;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class AuthController {
 
     private final UtilisateurService utilisateurService;
     private final JwtService jwtService;
+    private final FirebaseService firebaseService;
 
     @PostMapping("/inscription")
     public ResponseEntity<UtilisateurResponse> inscrire(@RequestBody InscriptionRequest req) {
@@ -39,6 +41,20 @@ public class AuthController {
     @PostMapping("/connexion")
     public ConnexionResponse connecter(@RequestBody ConnexionRequest req) {
         Utilisateur u = utilisateurService.connecter(req.telephone(), req.motDePasse());
+        String token = jwtService.genererToken(u);
+        return new ConnexionResponse(token, UtilisateurResponse.from(u));
+    }
+
+    /**
+     * Connexion « Continuer avec Google » : vérifie le jeton Firebase, connecte
+     * le compte lié à cet e-mail (ou le crée), puis renvoie un jeton JWT de
+     * l'application — exactement comme la connexion classique.
+     */
+    @PostMapping("/google")
+    public ConnexionResponse connecterGoogle(@RequestBody GoogleAuthRequest req) {
+        FirebaseService.InfosGoogle infos = firebaseService.verifier(req.idToken());
+        Utilisateur u = utilisateurService.connecterAvecGoogle(
+                infos.uid(), infos.email(), infos.nomComplet(), infos.photoUrl());
         String token = jwtService.genererToken(u);
         return new ConnexionResponse(token, UtilisateurResponse.from(u));
     }

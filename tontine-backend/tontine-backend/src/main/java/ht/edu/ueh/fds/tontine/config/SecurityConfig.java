@@ -49,6 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Endpoints publics : pas besoin d'etre connecte.
                         .requestMatchers("/api/auth/inscription", "/api/auth/connexion").permitAll()
+                        .requestMatchers("/api/auth/google").permitAll()
                         .requestMatchers("/api/auth/mot-de-passe/**").permitAll()
                         // Photos de profil televersees, lisibles sans jeton.
                         .requestMatchers("/uploads/**").permitAll()

@@ -11,7 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Regles metier des comptes :
@@ -90,6 +93,82 @@ public class UtilisateurService {
         }
         utilisateur.setDerniereConnexion(LocalDateTime.now());
         return utilisateurRepository.save(utilisateur);
+    }
+
+    /**
+     * Cas « Continuer avec Google » : connecte l'utilisateur dont l'e-mail Google
+     * existe déjà, sinon crée son compte à la volée puis le connecte. Les deux
+     * méthodes coexistent : un compte historique (email + mot de passe) reste
+     * utilisable normalement et se voit simplement lié à Google.
+     */
+    @Transactional
+    public Utilisateur connecterAvecGoogle(String uid, String email, String nomComplet, String photoUrl) {
+        String emailNorm = email.trim().toLowerCase();
+        Optional<Utilisateur> existant = utilisateurRepository.findByEmail(emailNorm);
+        if (existant.isPresent()) {
+            Utilisateur u = existant.get();
+            if ("BLOQUE".equals(u.getStatut())) {
+                throw new BusinessException("Ce compte est desactive. Contactez l'administrateur.");
+            }
+            // Lie le compte existant a Google (sans changer sa methode d'origine).
+            if (u.getGoogleUid() == null) {
+                u.setGoogleUid(uid);
+            }
+            u.setDerniereConnexion(LocalDateTime.now());
+            return utilisateurRepository.save(u);
+        }
+
+        // Nouveau compte Google : on remplit les champs obligatoires avec des
+        // valeurs par defaut/placeholder uniques (telephone + CIN), et un mot de
+        // passe aleatoire inutilisable. L'utilisateur completera son profil ensuite.
+        String[] noms = decouperNom(nomComplet, emailNorm);
+        String telephonePlaceholder = genererTelephonePlaceholder();
+        Utilisateur u = Utilisateur.builder()
+                .prenom(noms[0])
+                .nom(noms[1])
+                .sexe("N")
+                .telephone(telephonePlaceholder)
+                .email(emailNorm)
+                .adresse("")
+                .cinNif("SANS-CIN-" + telephonePlaceholder)
+                .dateNaissance(LocalDate.of(2000, 1, 1))
+                .motDePasseHache(passwordEncoder.encode("google-" + UUID.randomUUID()))
+                .photoUrl(photoUrl)
+                .role("MEMBRE")
+                .statut("ACTIF")
+                .authProvider("GOOGLE")
+                .googleUid(uid)
+                .build();
+        u.setDerniereConnexion(LocalDateTime.now());
+        return utilisateurRepository.save(u);
+    }
+
+    /** Sépare un nom complet en [prénom, nom] ; à défaut, dérive du courriel. */
+    private String[] decouperNom(String nomComplet, String email) {
+        String source;
+        if (nomComplet != null && !nomComplet.isBlank()) {
+            source = nomComplet.trim();
+        } else {
+            int at = email.indexOf('@');
+            source = at > 0 ? email.substring(0, at) : email;
+        }
+        String[] parts = source.split("\\s+", 2);
+        String prenom = parts[0];
+        String nom = parts.length > 1 ? parts[1] : parts[0];
+        return new String[]{prenom, nom};
+    }
+
+    /** Génère un numéro de téléphone placeholder unique pour un compte Google. */
+    private String genererTelephonePlaceholder() {
+        String tel;
+        do {
+            StringBuilder sb = new StringBuilder("G");
+            for (int i = 0; i < 12; i++) {
+                sb.append(RANDOM.nextInt(10));
+            }
+            tel = sb.toString();
+        } while (utilisateurRepository.existsByTelephone(tel));
+        return tel;
     }
 
     /** Cas « Decrire / Modifier son profil ». */
