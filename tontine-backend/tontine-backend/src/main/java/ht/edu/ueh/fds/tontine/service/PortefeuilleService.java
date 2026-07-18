@@ -34,6 +34,7 @@ public class PortefeuilleService {
     private final PortefeuilleRepository portefeuilleRepository;
     private final TransactionPortefeuilleRepository transactionRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final RegistreService registreService;
 
     /** Recupere le portefeuille de l'utilisateur, en le creant au premier acces. */
     @Transactional
@@ -145,6 +146,46 @@ public class PortefeuilleService {
         return p;
     }
 
+    /**
+     * Depot confirme par la passerelle de paiement (Mon Cash, NatCash, carte...).
+     * Credite le portefeuille en tracant le moyen utilise ; scelle un bloc au
+     * Registre Inviolable via {@link #enregistrer}.
+     */
+    @Transactional
+    public Portefeuille deposerParMoyen(String utilisateurId, BigDecimal montant,
+                                        String moyen, String reference) {
+        if (montant == null || montant.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Le montant du depot doit etre positif.");
+        }
+        Portefeuille p = getOuCreer(utilisateurId);
+        BigDecimal nouveauSolde = p.getSolde().add(montant);
+        p.setSolde(nouveauSolde);
+        portefeuilleRepository.save(p);
+        enregistrer(p, "DEPOT", "CREDIT", montant, nouveauSolde, reference, "Depot " + moyen);
+        return p;
+    }
+
+    /**
+     * Retrait confirme par la passerelle. Debite le portefeuille (rejet si solde
+     * insuffisant) et scelle un bloc au Registre Inviolable.
+     */
+    @Transactional
+    public Portefeuille retirerParMoyen(String utilisateurId, BigDecimal montant,
+                                        String moyen, String reference) {
+        if (montant == null || montant.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Le montant du retrait doit etre positif.");
+        }
+        Portefeuille p = getOuCreer(utilisateurId);
+        if (p.getSolde().compareTo(montant) < 0) {
+            throw new BusinessException("Solde insuffisant pour ce retrait.");
+        }
+        BigDecimal nouveauSolde = p.getSolde().subtract(montant);
+        p.setSolde(nouveauSolde);
+        portefeuilleRepository.save(p);
+        enregistrer(p, "RETRAIT", "DEBIT", montant, nouveauSolde, reference, "Retrait " + moyen);
+        return p;
+    }
+
     /** Journal des mouvements du portefeuille (du plus recent au plus ancien). */
     @Transactional
     public List<TransactionPortefeuille> historique(String utilisateurId) {
@@ -167,7 +208,7 @@ public class PortefeuilleService {
 
     private void enregistrer(Portefeuille p, String type, String sens, BigDecimal montant,
                              BigDecimal soldeApres, String reference, String description) {
-        transactionRepository.save(TransactionPortefeuille.builder()
+        TransactionPortefeuille tx = transactionRepository.save(TransactionPortefeuille.builder()
                 .portefeuille(p)
                 .type(type)
                 .sens(sens)
@@ -176,5 +217,11 @@ public class PortefeuilleService {
                 .referenceExterne(reference)
                 .description(description)
                 .build());
+
+        // Registre Inviolable : chaque mouvement d'argent est scellé dans le
+        // grand livre à hash chaîné (aucun gourde ne bouge sans trace scellée).
+        registreService.sceller(type, sens, montant,
+                p.getUtilisateur() != null ? p.getUtilisateur().getId() : null,
+                description, tx.getId());
     }
 }
