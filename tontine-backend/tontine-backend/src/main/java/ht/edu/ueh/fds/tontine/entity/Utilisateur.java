@@ -44,6 +44,15 @@ public class Utilisateur {
     @Column(nullable = false, unique = true)
     private String email;
 
+    /**
+     * Identifiant public unique (« @username »), à la manière de Wise/Revolut.
+     * Nullable en base pour permettre l'ajout de la colonne aux comptes existants
+     * (renseigné à l'inscription et modifiable dans le profil). Unicité vérifiée
+     * sans tenir compte de la casse. Un index unique accélère les recherches.
+     */
+    @Column(unique = true, length = 20)
+    private String username;
+
     @Column(nullable = false)
     private String adresse;
 

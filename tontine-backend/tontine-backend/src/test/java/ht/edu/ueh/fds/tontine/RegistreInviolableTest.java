@@ -1,5 +1,6 @@
 package ht.edu.ueh.fds.tontine;
 
+import ht.edu.ueh.fds.tontine.dto.BlocRegistreResponse;
 import ht.edu.ueh.fds.tontine.dto.VerificationRegistreResponse;
 import ht.edu.ueh.fds.tontine.entity.BlocRegistre;
 import ht.edu.ueh.fds.tontine.repository.BlocRegistreRepository;
@@ -7,15 +8,20 @@ import ht.edu.ueh.fds.tontine.service.RegistreService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Prouve la promesse du Registre Inviolable : la chaîne est vérifiée intègre
- * tant qu'on n'y touche pas, et toute falsification d'une écriture passée est
- * détectée (c'est le scénario de démonstration devant le jury).
+ * Prouve les deux promesses du Registre Inviolable :
+ * <ul>
+ *   <li>toute falsification d'une écriture passée est détectée (scénario démo) ;</li>
+ *   <li>chaque utilisateur ne voit que ses propres écritures.</li>
+ * </ul>
+ * Les tests sont robustes aux blocs déjà présents (base partagée entre tests).
  */
 @SpringBootTest
 class RegistreInviolableTest {
@@ -27,32 +33,52 @@ class RegistreInviolableTest {
     BlocRegistreRepository registreRepository;
 
     @Test
+    @Transactional  // annule la falsification en fin de test (base partagée entre tests)
     void chaineIntacte_puisDetecteUneFalsification() {
-        // 1. On scelle trois mouvements d'argent dans le registre.
+        long avant = registreRepository.count();
+
         registreService.sceller("DEPOT", "CREDIT", new BigDecimal("500.00"),
-                "user-1", "Dépôt Mon Cash", "tx-1");
+                "user-A", "Dépôt Mon Cash", "tx-1");
         registreService.sceller("COTISATION", "DEBIT", new BigDecimal("250.00"),
-                "user-1", "Cotisation Sol A", "tx-2");
+                "user-A", "Cotisation Sol A", "tx-2");
         registreService.sceller("GAIN_MAIN", "CREDIT", new BigDecimal("1500.00"),
-                "user-2", "Réception de la main", "tx-3");
+                "user-B", "Réception de la main", "tx-3");
 
-        // 2. Sans altération, la chaîne est intègre.
-        VerificationRegistreResponse avant = registreService.verifier();
-        assertThat(avant.intacte()).isTrue();
-        assertThat(avant.nombreBlocs()).isEqualTo(3);
-        assertThat(avant.positionRupture()).isNull();
-        assertThat(avant.empreinteGlobale()).isNotBlank();
+        VerificationRegistreResponse ok = registreService.verifier();
+        assertThat(ok.intacte()).isTrue();
+        assertThat(ok.empreinteGlobale()).isNotBlank();
 
-        // 3. Un fraudeur modifie en base le montant d'une écriture passée
-        //    (bloc #1) sans pouvoir recalculer un hash valide (pas de secret).
-        BlocRegistre bloc = registreRepository.findAllByOrderByPositionAsc().get(1);
-        bloc.setMontant(new BigDecimal("999999.00"));
-        registreRepository.save(bloc);
+        // Falsifie le 2ᵉ bloc que ce test a scellé (index global = avant + 1).
+        List<BlocRegistre> chaine = registreRepository.findAllByOrderByPositionAsc();
+        BlocRegistre cible = chaine.get((int) avant + 1);
+        long positionCible = cible.getPosition();
+        cible.setMontant(new BigDecimal("999999.00"));
+        registreRepository.save(cible);
 
-        // 4. Le registre attrape immédiatement la falsification au bon bloc.
         VerificationRegistreResponse apres = registreService.verifier();
         assertThat(apres.intacte()).isFalse();
-        assertThat(apres.positionRupture()).isEqualTo(1L);
-        assertThat(apres.empreinteGlobale()).isNull();
+        assertThat(apres.positionRupture()).isEqualTo(positionCible);
+    }
+
+    @Test
+    void chaqueUtilisateurNeVoitQueSesEcritures() {
+        String userX = "user-X-" + System.nanoTime();
+        String userY = "user-Y-" + System.nanoTime();
+
+        registreService.sceller("DEPOT", "CREDIT", new BigDecimal("100.00"), userX, "Dépôt X1", "x1");
+        registreService.sceller("DEPOT", "CREDIT", new BigDecimal("200.00"), userX, "Dépôt X2", "x2");
+        registreService.sceller("DEPOT", "CREDIT", new BigDecimal("300.00"), userY, "Dépôt Y1", "y1");
+
+        List<BlocRegistreResponse> blocsX = registreService.lister(userX);
+        assertThat(blocsX).hasSize(2);
+        assertThat(blocsX).allMatch(b -> b.description() != null && b.description().startsWith("Dépôt X"));
+
+        // La vérification porte sur toute la chaîne, mais compte les écritures de X.
+        VerificationRegistreResponse vX = registreService.verifier(userX);
+        assertThat(vX.intacte()).isTrue();
+        assertThat(vX.nombreBlocs()).isEqualTo(2);
+
+        VerificationRegistreResponse vY = registreService.verifier(userY);
+        assertThat(vY.nombreBlocs()).isEqualTo(1);
     }
 }

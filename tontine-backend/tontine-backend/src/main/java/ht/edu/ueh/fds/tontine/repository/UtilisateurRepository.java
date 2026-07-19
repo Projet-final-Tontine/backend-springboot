@@ -22,6 +22,15 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, String
 
     boolean existsByCinNif(String cinNif);
 
+    /** Recherche publique par username (insensible à la casse). */
+    Optional<Utilisateur> findByUsernameIgnoreCase(String username);
+
+    /** Disponibilité d'un username (insensible à la casse). */
+    boolean existsByUsernameIgnoreCase(String username);
+
+    /** Recherche d'un bénéficiaire par e-mail (insensible à la casse). */
+    Optional<Utilisateur> findByEmailIgnoreCase(String email);
+
     /** Pour le tableau de bord admin : filtrer par statut (ACTIF, BLOQUE, ...). */
     List<Utilisateur> findByStatut(String statut);
 

@@ -9,6 +9,7 @@ public record UtilisateurResponse(
         String prenom,
         String telephone,
         String email,
+        String username,
         String photoUrl,
         String role,
         String statut
@@ -16,6 +17,6 @@ public record UtilisateurResponse(
     public static UtilisateurResponse from(Utilisateur u) {
         return new UtilisateurResponse(
                 u.getId(), u.getNom(), u.getPrenom(), u.getTelephone(),
-                u.getEmail(), u.getPhotoUrl(), u.getRole(), u.getStatut());
+                u.getEmail(), u.getUsername(), u.getPhotoUrl(), u.getRole(), u.getStatut());
     }
 }

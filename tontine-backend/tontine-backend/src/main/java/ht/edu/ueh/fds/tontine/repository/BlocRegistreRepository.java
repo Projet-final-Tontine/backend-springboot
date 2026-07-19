@@ -18,5 +18,8 @@ public interface BlocRegistreRepository extends JpaRepository<BlocRegistre, Stri
     /** Chaîne du plus récent au plus ancien (affichage mobile). */
     List<BlocRegistre> findAllByOrderByPositionDesc();
 
+    /** Blocs d'un utilisateur donné, du plus récent au plus ancien. */
+    List<BlocRegistre> findByUtilisateurIdOrderByPositionDesc(String utilisateurId);
+
     long count();
 }

@@ -14,6 +14,7 @@ public final class AuthRequests {
             String sexe,
             String telephone,
             String email,
+            String username,
             String adresse,
             String cinNif,
             LocalDate dateNaissance,

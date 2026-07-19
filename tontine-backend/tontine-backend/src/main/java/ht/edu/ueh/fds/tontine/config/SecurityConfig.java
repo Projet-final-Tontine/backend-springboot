@@ -51,6 +51,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/inscription", "/api/auth/connexion").permitAll()
                         .requestMatchers("/api/auth/google").permitAll()
                         .requestMatchers("/api/auth/mot-de-passe/**").permitAll()
+                        // Disponibilite d'un username (verifiee pendant l'inscription).
+                        .requestMatchers("/api/users/username-disponible").permitAll()
                         // Photos de profil televersees, lisibles sans jeton.
                         .requestMatchers("/uploads/**").permitAll()
                         // Verification publique d'un certificat de fiabilite (scan QR par une banque).

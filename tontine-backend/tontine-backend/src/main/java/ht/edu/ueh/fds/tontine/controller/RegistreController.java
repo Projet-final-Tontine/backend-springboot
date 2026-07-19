@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.security.Principal;
 import java.util.List;
 
 /**
@@ -24,16 +25,16 @@ public class RegistreController {
 
     private final RegistreService registreService;
 
-    /** Liste des blocs scellés (du plus récent au plus ancien). */
+    /** Liste des blocs scellés de l'utilisateur connecté (du plus récent au plus ancien). */
     @GetMapping
-    public List<BlocRegistreResponse> registre() {
-        return registreService.lister();
+    public List<BlocRegistreResponse> registre(Principal principal) {
+        return registreService.lister(principal.getName());
     }
 
-    /** Vérifie l'intégrité de toute la chaîne (badge « inviolable » dans l'app). */
+    /** Vérifie l'intégrité de la chaîne pour l'utilisateur (badge « inviolable »). */
     @GetMapping("/verifier")
-    public VerificationRegistreResponse verifier() {
-        return registreService.verifier();
+    public VerificationRegistreResponse verifier(Principal principal) {
+        return registreService.verifier(principal.getName());
     }
 
     /** Page HTML publique d'attestation d'intégrité du registre. */

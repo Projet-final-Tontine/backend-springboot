@@ -43,6 +43,11 @@ public class UtilisateurService {
         if (utilisateurRepository.existsByEmail(utilisateur.getEmail())) {
             throw new BusinessException("Cet email est deja utilise.");
         }
+        // Username public obligatoire : format valide + unicite insensible a la casse.
+        AnnuaireService.validerFormat(utilisateur.getUsername());
+        if (utilisateurRepository.existsByUsernameIgnoreCase(utilisateur.getUsername())) {
+            throw new BusinessException("Ce username est deja utilise.");
+        }
         // CIN/NIF facultatif : s'il est vide, on lui attribue une valeur unique
         // (basee sur le telephone, deja unique) pour ne JAMAIS entrer en collision.
         // Sinon, on verifie l'unicite normalement.

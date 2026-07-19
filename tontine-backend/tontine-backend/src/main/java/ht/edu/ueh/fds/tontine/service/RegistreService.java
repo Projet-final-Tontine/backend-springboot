@@ -84,9 +84,28 @@ public class RegistreService {
      * contrôle le chaînage. Renvoie la position du premier bloc corrompu, le cas
      * échéant. C'est cette méthode qui « attrape » toute falsification en base.
      */
+    /** Vérification globale de tout le registre (page publique d'intégrité). */
     @Transactional(readOnly = true)
     public VerificationRegistreResponse verifier() {
         List<BlocRegistre> chaine = registreRepository.findAllByOrderByPositionAsc();
+        return construireVerification(chaine, chaine.size(), "les");
+    }
+
+    /**
+     * Vérification pour un utilisateur : l'intégrité porte sur toute la chaîne
+     * (une falsification, où qu'elle soit, invalide le registre), mais le nombre
+     * affiché correspond aux écritures de cet utilisateur.
+     */
+    @Transactional(readOnly = true)
+    public VerificationRegistreResponse verifier(String utilisateurId) {
+        List<BlocRegistre> chaine = registreRepository.findAllByOrderByPositionAsc();
+        long blocsUtilisateur = chaine.stream()
+                .filter(b -> utilisateurId.equals(b.getUtilisateurId())).count();
+        return construireVerification(chaine, blocsUtilisateur, "vos");
+    }
+
+    private VerificationRegistreResponse construireVerification(
+            List<BlocRegistre> chaine, long nombreAffiche, String possessif) {
         if (chaine.isEmpty()) {
             return new VerificationRegistreResponse(true, 0, null, HASH_GENESE,
                     "Registre vide : aucune transaction scellée pour l'instant.");
@@ -98,35 +117,35 @@ public class RegistreService {
             // 1) le chaînage : ce bloc doit pointer vers le hash du précédent
             if (!hashAttendu.equals(bloc.getHashPrecedent())
                     || bloc.getPosition() != positionAttendue) {
-                return rupture(bloc.getPosition(), chaine.size());
+                return rupture(bloc.getPosition(), nombreAffiche);
             }
             // 2) l'intégrité : le hash recalculé doit correspondre au hash stocké
             String recalcule = calculerHash(bloc.getPosition(), bloc.getDateScellement(),
                     bloc.getType(), bloc.getSens(), normaliser(bloc.getMontant()),
                     bloc.getUtilisateurId(), bloc.getDescription(), bloc.getHashPrecedent());
             if (!recalcule.equals(bloc.getHash())) {
-                return rupture(bloc.getPosition(), chaine.size());
+                return rupture(bloc.getPosition(), nombreAffiche);
             }
             hashAttendu = bloc.getHash();
             positionAttendue++;
         }
 
         String empreinte = chaine.get(chaine.size() - 1).getHash();
-        return new VerificationRegistreResponse(true, chaine.size(), null, empreinte,
-                "Chaîne intègre : les " + chaine.size()
+        return new VerificationRegistreResponse(true, nombreAffiche, null, empreinte,
+                "Chaîne intègre : " + possessif + " " + nombreAffiche
                         + " écritures sont authentiques et non modifiées.");
     }
 
-    private VerificationRegistreResponse rupture(long position, int total) {
-        return new VerificationRegistreResponse(false, total, position, null,
+    private VerificationRegistreResponse rupture(long position, long nombreAffiche) {
+        return new VerificationRegistreResponse(false, nombreAffiche, position, null,
                 "⚠️ Falsification détectée au bloc #" + position
                         + " : le registre a été altéré et n'est plus fiable.");
     }
 
-    /** Blocs du plus récent au plus ancien (affichage). */
+    /** Blocs d'un utilisateur, du plus récent au plus ancien (affichage). */
     @Transactional(readOnly = true)
-    public List<BlocRegistreResponse> lister() {
-        return registreRepository.findAllByOrderByPositionDesc()
+    public List<BlocRegistreResponse> lister(String utilisateurId) {
+        return registreRepository.findByUtilisateurIdOrderByPositionDesc(utilisateurId)
                 .stream().map(BlocRegistreResponse::from).toList();
     }
 

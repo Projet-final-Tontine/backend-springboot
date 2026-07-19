@@ -30,6 +30,7 @@ public class AuthController {
         Utilisateur u = Utilisateur.builder()
                 .nom(req.nom()).prenom(req.prenom()).sexe(req.sexe())
                 .telephone(req.telephone()).email(req.email()).adresse(req.adresse())
+                .username(req.username())
                 .cinNif(req.cinNif()).dateNaissance(req.dateNaissance())
                 .role(req.role())
                 .build();
