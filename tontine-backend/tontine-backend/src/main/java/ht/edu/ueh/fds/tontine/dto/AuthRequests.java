@@ -16,7 +16,6 @@ public final class AuthRequests {
             String email,
             String username,
             String adresse,
-            String cinNif,
             LocalDate dateNaissance,
             String motDePasse,
             String role

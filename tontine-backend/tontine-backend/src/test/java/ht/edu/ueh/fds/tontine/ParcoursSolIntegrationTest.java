@@ -32,17 +32,19 @@ class ParcoursSolIntegrationTest {
     @Test
     void parcoursComplet_avecAuthentificationJwt() throws Exception {
         // 1. Inscriptions
-        inscrire("Admin", "Sys", "50937000000", "admin@sol.ht", "001-000", "ADMIN");
+        inscrire("Admin", "Sys", "50937000000", "admin@sol.ht", "admin_sys", "ADMIN");
         MvcResult manmanRes = inscrire("Jean", "Marie", "50937111111",
-                "manman@sol.ht", "001-111", "MANMAN_SOL");
+                "manman@sol.ht", "jean_marie", "MANMAN_SOL");
         String manmanId = champ(manmanRes, "id");
-        assertThat(champ(manmanRes, "statut")).isEqualTo("EN_ATTENTE");
+        // Auto-activation a l'inscription : le compte est directement ACTIF
+        // (l'administrateur conserve le pouvoir de le bloquer ensuite).
+        assertThat(champ(manmanRes, "statut")).isEqualTo("ACTIF");
 
         // 2. Connexions -> recuperation des jetons JWT
         String adminToken = connecter("50937000000", "motdepasse123");
         assertThat(adminToken).isNotBlank();
 
-        // 3. L'admin active le compte de la Manman sol (endpoint reserve ADMIN)
+        // 3. L'admin confirme l'activation du compte (endpoint reserve ADMIN) : reste ACTIF
         mvc.perform(post("/api/admin/utilisateurs/" + manmanId + "/activer")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
@@ -62,14 +64,25 @@ class ParcoursSolIntegrationTest {
         String code = champ(solRes, "codeInvitation");
         assertThat(code).isNotBlank();
 
-        // 5. Un membre s'inscrit, se connecte et rejoint le Sol via le code
-        inscrire("Paul", "Pierre", "50937222222", "membre@sol.ht", "001-222", "MEMBRE");
+        // 5. Un membre s'inscrit, se connecte et demande a rejoindre le Sol via le code.
+        //    L'adhesion passe par une demande EN_ATTENTE : l'ordre de passage
+        //    n'est attribue qu'apres approbation par la Manman sol.
+        inscrire("Paul", "Pierre", "50937222222", "membre@sol.ht", "paul_pierre", "MEMBRE");
         String membreToken = connecter("50937222222", "motdepasse123");
-        mvc.perform(post("/api/sols/rejoindre")
+        MvcResult demandeRes = mvc.perform(post("/api/sols/rejoindre")
                         .header("Authorization", "Bearer " + membreToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"codeInvitation\":\"" + code + "\"}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statutMembre").value("EN_ATTENTE"))
+                .andReturn();
+        String membreSolId = champ(demandeRes, "id");
+
+        // 5b. La Manman sol approuve la demande : le membre devient ACTIF, ordre 2.
+        mvc.perform(post("/api/sols/membres/" + membreSolId + "/approuver")
+                        .header("Authorization", "Bearer " + manmanToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutMembre").value("ACTIF"))
                 .andExpect(jsonPath("$.ordrePassage").value(2));
 
         // 6. SECURITE : sans jeton -> acces refuse (401)
@@ -93,14 +106,14 @@ class ParcoursSolIntegrationTest {
     }
 
     private MvcResult inscrire(String nom, String prenom, String tel,
-                               String email, String cin, String role) throws Exception {
+                               String email, String username, String role) throws Exception {
         return mvc.perform(post("/api/auth/inscription")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nom":"%s","prenom":"%s","sexe":"M","telephone":"%s",
-                                 "email":"%s","adresse":"Port-au-Prince","cinNif":"%s",
+                                 "email":"%s","username":"%s","adresse":"Port-au-Prince",
                                  "dateNaissance":"1990-01-01","motDePasse":"motdepasse123","role":"%s"}"""
-                                .formatted(nom, prenom, tel, email, cin, role)))
+                                .formatted(nom, prenom, tel, email, username, role)))
                 .andExpect(status().isCreated())
                 .andReturn();
     }

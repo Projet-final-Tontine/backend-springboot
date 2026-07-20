@@ -34,7 +34,7 @@ public class UtilisateurService {
     private final JetonReinitialisationRepository jetonRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /** Cas « S'inscrire » : creation du compte (statut EN_ATTENTE jusqu'a activation). */
+    /** Cas « S'inscrire » : creation du compte (auto-active, l'admin peut le bloquer). */
     @Transactional
     public Utilisateur inscrire(Utilisateur utilisateur, String motDePasseClair) {
         if (utilisateurRepository.existsByTelephone(utilisateur.getTelephone())) {
