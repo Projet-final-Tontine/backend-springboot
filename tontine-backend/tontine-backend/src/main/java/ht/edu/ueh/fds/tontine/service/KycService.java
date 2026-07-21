@@ -112,6 +112,27 @@ public class KycService {
         return construire(u, kyc);
     }
 
+    /** Vrai si l'identité de l'utilisateur est vérifiée (dossier KYC approuvé). */
+    @Transactional(readOnly = true)
+    public boolean estVerifie(String utilisateurId) {
+        return kycRepository.findByUtilisateurId(utilisateurId)
+                .map(k -> "APPROUVE".equals(k.getStatut()))
+                .orElse(false);
+    }
+
+    /**
+     * Barrière stricte : refuse toute opération financière (dépôt, retrait,
+     * transfert) tant que l'identité n'est pas vérifiée. À appeler au tout début
+     * des opérations concernées.
+     */
+    public void exigerVerifie(String utilisateurId) {
+        if (!estVerifie(utilisateurId)) {
+            throw new BusinessException(
+                    "Vérification d'identité requise : vérifiez votre identité (KYC) "
+                    + "avant d'effectuer un dépôt, un retrait ou un transfert.");
+        }
+    }
+
     private KycEtatResponse construire(Utilisateur u, VerificationKyc kyc) {
         return new KycEtatResponse(
                 u.getNom(), u.getPrenom(),

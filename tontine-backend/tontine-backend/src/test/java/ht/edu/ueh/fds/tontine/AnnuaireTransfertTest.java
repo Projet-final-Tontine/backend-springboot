@@ -1,6 +1,7 @@
 package ht.edu.ueh.fds.tontine;
 
 import ht.edu.ueh.fds.tontine.dto.AnnuaireDtos.RechercheUtilisateurResponse;
+import ht.edu.ueh.fds.tontine.dto.TransfertDtos.TransfertRequest;
 import ht.edu.ueh.fds.tontine.entity.Utilisateur;
 import ht.edu.ueh.fds.tontine.exception.BusinessException;
 import ht.edu.ueh.fds.tontine.repository.UtilisateurRepository;
@@ -29,6 +30,8 @@ class AnnuaireTransfertTest {
     @Autowired TransfertService transfertService;
     @Autowired PortefeuilleService portefeuilleService;
     @Autowired UtilisateurRepository utilisateurRepository;
+    @Autowired ht.edu.ueh.fds.tontine.service.FavoriService favoriService;
+    @Autowired ht.edu.ueh.fds.tontine.repository.VerificationKycRepository kycRepository;
 
     @Test
     void username_format_disponibilite_et_unicite() {
@@ -66,15 +69,87 @@ class AnnuaireTransfertTest {
         assertThatThrownBy(() -> annuaireService.rechercher(a.getUsername(), a.getId()))
                 .isInstanceOf(BusinessException.class);
 
-        // Transfert : A dépose 1000, envoie 400 à B.
+        // Règle stricte : l'expéditeur doit avoir une identité vérifiée (KYC).
+        approuverKyc(a.getId());
+
+        // Transfert : A dépose 1000, envoie 400 à B -> reçu avec référence unique.
         portefeuilleService.deposerParMoyen(a.getId(), new BigDecimal("1000"), "TEST", "ref");
-        transfertService.transferer(a.getId(), "@" + b.getUsername(), new BigDecimal("400"), "merci");
+        var recu = transfertService.transferer(a.getId(),
+                new TransfertRequest("@" + b.getUsername(), new BigDecimal("400"), "HTG", "merci", "Empreinte digitale"));
+        assertThat(recu.reference()).startsWith("SOL-");
+        assertThat(recu.transactionId()).startsWith("TX-");
+        assertThat(recu.soldeRestant()).isEqualByComparingTo("600");
         assertThat(portefeuilleService.solde(a.getId())).isEqualByComparingTo("600");
         assertThat(portefeuilleService.solde(b.getId())).isEqualByComparingTo("400");
 
+        // L'historique de A contient ce transfert (sens ENVOYE).
+        var histo = transfertService.historique(a.getId(), "ENVOYES", null);
+        assertThat(histo).hasSize(1);
+        assertThat(histo.get(0).sens()).isEqualTo("ENVOYE");
+        assertThat(histo.get(0).montant()).isEqualByComparingTo("400");
+
         // Solde insuffisant refusé.
-        assertThatThrownBy(() -> transfertService.transferer(a.getId(), "@" + b.getUsername(),
-                new BigDecimal("999999"), null)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> transfertService.transferer(a.getId(),
+                new TransfertRequest("@" + b.getUsername(), new BigDecimal("999999"), "HTG", null, null)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void transfert_refuse_si_identite_non_verifiee() {
+        Utilisateur a = creer("nonkyc" + (System.nanoTime() % 100000));
+        Utilisateur b = creer("cible" + (System.nanoTime() % 100000));
+        // A a de l'argent mais PAS de KYC approuvé.
+        portefeuilleService.deposerParMoyen(a.getId(), new BigDecimal("1000"), "TEST", "ref");
+
+        assertThatThrownBy(() -> transfertService.transferer(a.getId(),
+                new TransfertRequest("@" + b.getUsername(), new BigDecimal("100"), "HTG", null, null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("dentité"); // « Vérification d'identité requise… »
+
+        // Une fois l'identité vérifiée, le même transfert passe.
+        approuverKyc(a.getId());
+        var recu = transfertService.transferer(a.getId(),
+                new TransfertRequest("@" + b.getUsername(), new BigDecimal("100"), "HTG", null, "Empreinte digitale"));
+        assertThat(recu.reference()).startsWith("SOL-");
+    }
+
+    @Test
+    void recu_detail_verification_et_favoris() {
+        Utilisateur a = creer("exp" + (System.nanoTime() % 100000));
+        Utilisateur b = creer("ben" + (System.nanoTime() % 100000));
+        approuverKyc(a.getId());
+        portefeuilleService.deposerParMoyen(a.getId(), new BigDecimal("500"), "TEST", "ref");
+
+        var recu = transfertService.transferer(a.getId(),
+                new TransfertRequest("@" + b.getUsername(), new BigDecimal("200"), "HTG", "cadeau", "Mot de passe"));
+
+        // Détail accessible à l'expéditeur ; vérification publique par référence.
+        var detail = transfertService.detail(a.getId(), recu.id());
+        assertThat(detail.sens()).isEqualTo("ENVOYE");
+        assertThat(detail.message()).isEqualTo("cadeau");
+        assertThat(transfertService.verifier(recu.reference())).isNotNull();
+        assertThat(transfertService.verifier("SOL-INEXISTANT")).isNull();
+
+        // Favoris : ajouter, lister, supprimer.
+        favoriService.ajouter(a.getId(), b.getId());
+        assertThat(favoriService.lister(a.getId())).hasSize(1);
+        assertThat(favoriService.lister(a.getId()).get(0).username()).isEqualTo(b.getUsername());
+        favoriService.supprimer(a.getId(), b.getId());
+        assertThat(favoriService.lister(a.getId())).isEmpty();
+    }
+
+    /** Crée un dossier KYC approuvé (identité vérifiée) pour l'utilisateur. */
+    private void approuverKyc(String userId) {
+        kycRepository.save(ht.edu.ueh.fds.tontine.entity.VerificationKyc.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .utilisateurId(userId)
+                .typeDocument("CARTE_IDENTITE")
+                .rectoUrl("recto.jpg")
+                .versoUrl("verso.jpg")
+                .statut("APPROUVE")
+                .dateSoumission(java.time.LocalDateTime.now())
+                .dateDecision(java.time.LocalDateTime.now())
+                .build());
     }
 
     private Utilisateur creer(String username) {

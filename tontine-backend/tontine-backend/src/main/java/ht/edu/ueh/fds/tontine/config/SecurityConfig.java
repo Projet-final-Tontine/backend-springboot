@@ -59,6 +59,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/releve/verifier/**").permitAll()
                         // Attestation publique d'integrite du Registre Inviolable.
                         .requestMatchers("/api/registre/integrite").permitAll()
+                        // Verification publique d'un recu de transfert (scan QR).
+                        .requestMatchers("/api/transferts/verifier/**").permitAll()
                         // Pages web de la passerelle de paiement (ouvertes dans le navigateur).
                         .requestMatchers("/pay/**").permitAll()
                         // Page web d'administration (l'API interne reste protegee par jeton).

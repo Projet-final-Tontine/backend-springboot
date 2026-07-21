@@ -45,6 +45,7 @@ public class PasserelleService {
 
     private final PaiementSimuleRepository paiementRepository;
     private final PortefeuilleService portefeuilleService;
+    private final KycService kycService;
 
     @Value("${app.public-url:http://localhost:8080}")
     private String urlPublique;
@@ -53,6 +54,9 @@ public class PasserelleService {
     @Transactional
     public InitierPaiementResponse initier(String utilisateurId, String sens,
                                            String moyen, BigDecimal montant) {
+        // Règle stricte : aucun dépôt ni retrait tant que l'identité n'est pas vérifiée.
+        kycService.exigerVerifie(utilisateurId);
+
         String s = sens == null ? "" : sens.trim().toUpperCase();
         String m = moyen == null ? "" : moyen.trim().toUpperCase();
         if (!s.equals("DEPOT") && !s.equals("RETRAIT")) {

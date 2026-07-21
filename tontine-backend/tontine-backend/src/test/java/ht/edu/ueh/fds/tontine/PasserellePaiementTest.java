@@ -30,6 +30,7 @@ class PasserellePaiementTest {
     @Autowired PortefeuilleService portefeuille;
     @Autowired RegistreService registre;
     @Autowired UtilisateurRepository utilisateurRepository;
+    @Autowired ht.edu.ueh.fds.tontine.repository.VerificationKycRepository kycRepository;
 
     private String userId;
 
@@ -46,6 +47,18 @@ class PasserellePaiementTest {
                 .role("MEMBRE")
                 .build());
         userId = u.getId();
+
+        // Règle stricte : dépôt/retrait exigent une identité vérifiée (KYC approuvé).
+        kycRepository.save(ht.edu.ueh.fds.tontine.entity.VerificationKyc.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .utilisateurId(userId)
+                .typeDocument("CARTE_IDENTITE")
+                .rectoUrl("recto.jpg")
+                .versoUrl("verso.jpg")
+                .statut("APPROUVE")
+                .dateSoumission(java.time.LocalDateTime.now())
+                .dateDecision(java.time.LocalDateTime.now())
+                .build());
     }
 
     @Test

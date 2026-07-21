@@ -20,6 +20,7 @@ public class AnnuaireDtos {
             String username,
             String nomComplet,
             String photoUrl,
-            boolean kycVerifie) {
+            boolean kycVerifie,
+            Integer scoreFiabilite) {  // null si aucun historique
     }
 }

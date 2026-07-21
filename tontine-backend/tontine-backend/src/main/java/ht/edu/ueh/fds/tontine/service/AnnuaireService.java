@@ -30,6 +30,8 @@ public class AnnuaireService {
 
     private final UtilisateurRepository utilisateurRepository;
     private final VerificationKycRepository kycRepository;
+    private final ht.edu.ueh.fds.tontine.repository.MembreSolRepository membreSolRepository;
+    private final ht.edu.ueh.fds.tontine.repository.CotisationRepository cotisationRepository;
 
     /** Valide le format du username ; lève une exception explicite sinon. */
     public static void validerFormat(String username) {
@@ -108,6 +110,32 @@ public class AnnuaireService {
         return new RechercheUtilisateurResponse(
                 u.getId(), u.getUsername(),
                 u.getPrenom() + " " + u.getNom(),
-                u.getPhotoUrl(), kycVerifie);
+                u.getPhotoUrl(), kycVerifie, scoreFiabilite(u.getId()));
+    }
+
+    /**
+     * Score de fiabilité simple (0-100) : part des cotisations validées.
+     * Renvoie {@code null} si l'utilisateur n'a encore aucun historique.
+     */
+    @Transactional(readOnly = true)
+    public Integer scoreFiabilite(String utilisateurId) {
+        long total = 0;
+        long validees = 0;
+        for (var membre : membreSolRepository.findByUtilisateurId(utilisateurId)) {
+            for (var c : cotisationRepository.findByMembreSolIdOrderByDateEcheanceDesc(membre.getId())) {
+                if ("VALIDE".equals(c.getStatut()) || "EN_ATTENTE".equals(c.getStatut())
+                        || "REJETE".equals(c.getStatut())) {
+                    total++;
+                    if ("VALIDE".equals(c.getStatut())) {
+                        validees++;
+                    }
+                }
+            }
+        }
+        if (total == 0) {
+            return null;
+        }
+        return (int) Math.round(validees * 100.0 / total);
     }
 }
+
